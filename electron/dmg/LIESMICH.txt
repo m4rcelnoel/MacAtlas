@@ -3,11 +3,9 @@ MacAtlas — Installation
 
 1. Ziehe „MacAtlas.app" in den Ordner „Applications".
 
-2. ERSTER START: Rechtsklick auf die App → „Öffnen" (nicht Doppelklick),
-   dann im Dialog nochmal „Öffnen" bestätigen. Danach startet sie normal.
-
-   Falls macOS „ist beschädigt" meldet: Doppelklick auf die mitgelieferte
-   Datei „Erste Hilfe wenn Mac es blockiert.command".
+2. Doppelklick auf MacAtlas. Die App ist von Apple notarisiert und startet
+   ohne Warnung. Nur bei selbst gebauten Versionen ohne Developer ID:
+   Rechtsklick → „Öffnen" bzw. „Erste Hilfe wenn Mac es blockiert.command".
 
 3. Beim ersten Start ist die App leer. Klick auf „Mac scannen".
    Der Scan dauert 30–60 s und erfasst Hardware, alle Programme und

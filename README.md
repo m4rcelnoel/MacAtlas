@@ -86,7 +86,9 @@ open "macatlas://scan"
 
 1. Download `MacAtlas.dmg` from the [latest release](https://github.com/m4rcelnoel/MacAtlas/releases).
 2. Drag MacAtlas into *Applications*.
-3. **First launch:** releases built without Developer ID signing are ad-hoc signed, so macOS asks once: right-click the app → *Open* → *Open*. If macOS says the app "is damaged":
+3. Open it. Releases are signed with Developer ID and notarized by Apple, so it starts with a double-click.
+
+   Building it yourself without a Developer ID gives an ad-hoc signed app – then macOS asks once: right-click → *Open* → *Open*. If macOS says the app "is damaged":
 
    ```bash
    xattr -dr com.apple.quarantine /Applications/MacAtlas.app
