@@ -84,17 +84,21 @@ open "macatlas://scan"
 
 ## Install
 
-1. Download `MacAtlas.dmg` from the [latest release](https://github.com/m4rcelnoel/MacAtlas/releases).
-2. Drag MacAtlas into *Applications*.
-3. Open it. Releases are signed with Developer ID and notarized by Apple, so it starts with a double-click.
+**[⬇ Download MacAtlas.dmg](https://github.com/m4rcelnoel/MacAtlas/releases/latest/download/MacAtlas.dmg)** (latest release, ~100 MB)
 
-   Building it yourself without a Developer ID gives an ad-hoc signed app – then macOS asks once: right-click → *Open* → *Open*. If macOS says the app "is damaged":
+1. Open the DMG and drag **MacAtlas** into *Applications*.
+2. Start MacAtlas with a double-click – releases are signed with Developer ID and notarized by Apple, so macOS opens it without a warning.
+3. Click **Scan Mac**. The first scan takes 30–60 seconds; no administrator password is needed.
 
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/MacAtlas.app
-   ```
+**Requirements**
 
-Requirements: macOS on Apple Silicon. The scanner uses the Python 3 that ships with the Xcode Command Line Tools. Homebrew, `mas`, Docker etc. are optional – whatever is installed gets scanned.
+- macOS on Apple Silicon (M1 or newer)
+- Xcode Command Line Tools for `python3` – if they're missing, macOS offers to install them on the first scan (or run `xcode-select --install`)
+- Optional: Homebrew, `mas`, npm, pip, Docker, VS Code … – whatever is installed gets scanned, everything else is skipped
+
+**Updating** – download the new DMG and replace the app in *Applications*. Scans, history, notes and settings are kept.
+
+**Uninstalling** – quit MacAtlas, move it to the Trash and delete `~/Library/Application Support/MacAtlas` to remove its data. If you turned on sharing, also delete the `MacAtlas` folder in iCloud Drive.
 
 ## Privacy
 
@@ -111,6 +115,12 @@ npm test           # unit & static tests (Node's built-in test runner)
 cd .. && python3 -m unittest discover -s tests   # scanner tests
 ./build.sh         # package, sign ad hoc, install to /Applications, build the DMG
 ./build.sh --no-install
+```
+
+Without a Developer ID, `build.sh` signs ad hoc. Such builds open with right-click → *Open* → *Open* on other Macs; if macOS reports the app as damaged, remove the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MacAtlas.app
 ```
 
 ### How it works
