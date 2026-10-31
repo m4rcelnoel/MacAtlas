@@ -1555,6 +1555,8 @@ function pageLicenses() {
 }
 
 // ── Settings ───────────────────────────────────────────────────────
+const BUDDSTER_URL = "https://buddster.de";
+const REPO_URL = "https://github.com/m4rcelnoel/MacAtlas";
 function toggle(key, on, disabled) {
   return `<label class="switch${disabled ? " disabled" : ""}"><input type="checkbox" data-set="${key}"${on ? " checked" : ""}${disabled ? " disabled" : ""}><span></span></label>`;
 }
@@ -1622,7 +1624,14 @@ function pageSettings() {
     </div>
     <div class="group-title">${t("Über")}</div>
     <div class="group">
-      ${kv("MacAtlas", esc(t("Version {v}", { v: s.version })))}
+      <div class="about-head">
+        <img src="icon.png" alt="">
+        <div><b>MacAtlas</b><span>${esc(t("Version {v}", { v: s.version }))}</span>
+          <span>${t("Entwickelt von {b}", { b: `<a href="#" data-url="${BUDDSTER_URL}">buddster</a>` })} · ${t("Software- und Webdevelopment")}</span></div>
+      </div>
+      ${setRow("globe", "buddster", "buddster.de", `<button class="btn" data-url="${BUDDSTER_URL}">${t("Webseite öffnen")}</button>`)}
+      ${setRow("script", t("Quellcode"), "github.com/m4rcelnoel/MacAtlas", `<button class="btn" data-url="${REPO_URL}">GitHub</button>`)}
+      ${setRow("warn", t("Fehler melden & Ideen"), t("Issue auf GitHub öffnen"), `<button class="btn" data-url="${REPO_URL}/issues">${t("Öffnen")}</button>`)}
       ${kv("Electron", esc(s.electron))}
       ${kv(t("Tastenkürzel"), "⌘R " + t("Scannen") + " · ⌘E " + t("Export") + " · ⇧⌘E Brewfile · ⌘P PDF · ⌘I Import · ⌘F " + t("Suche") + " · ⌘, " + t("Einstellungen"))}
     </div>

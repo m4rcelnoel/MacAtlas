@@ -347,6 +347,8 @@ const I18N_EN = {
   "In der Kurzbefehle-App die Aktion „URL öffnen\" verwenden – oder im Terminal: open macatlas://scan. Berichte und Exporte landen in {d}.": "Use the “Open URLs” action in the Shortcuts app – or in Terminal: open macatlas://scan. Reports and exports are saved to {d}.",
   "Ordner für Berichte & Exporte": "Folder for reports & exports", "PDF-Bericht sichern": "Save PDF report", "CSV exportieren": "Export CSV",
   "JSON exportieren": "Export JSON", "Updates öffnen": "Open Updates",
+  "Entwickelt von {b}": "Made by {b}", "Software- und Webdevelopment": "Software & web development", "Webseite öffnen": "Open Website",
+  "Quellcode": "Source code", "Fehler melden & Ideen": "Report a bug or suggest an idea", "Issue auf GitHub öffnen": "Open an issue on GitHub",
   "AirPlay-Empfänger von macOS (Systemeinstellungen → Allgemein → AirDrop & Handoff)": "macOS AirPlay Receiver (System Settings → General → AirDrop & Handoff)",
   "Handoff und Universal Clipboard von macOS": "macOS Handoff and Universal Clipboard", "AirDrop und Freigaben von macOS": "macOS AirDrop and sharing",
   "Docker – Ports deiner laufenden Container": "Docker – ports of your running containers", "MariaDB-Datenbank (Homebrew-Dienst)": "MariaDB database (Homebrew service)",

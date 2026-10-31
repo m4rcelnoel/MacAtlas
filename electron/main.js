@@ -1053,7 +1053,7 @@ ipcMain.handle("report:pdf", async (_e, { html, name }) => {
 app.whenReady().then(() => {
   if (!gotLock) return;
   nativeTheme.themeSource = settings.theme;
-  app.setAboutPanelOptions({ applicationName: "MacAtlas", applicationVersion: app.getVersion(), copyright: "© m4rcelnoel · github.com/m4rcelnoel/MacAtlas" });
+  app.setAboutPanelOptions({ applicationName: "MacAtlas", applicationVersion: app.getVersion(), copyright: "© buddster · buddster.de" });
   createWindow();
   setTrayVisible(settings.showTray);
   // First check shortly after launch, then every 30 minutes

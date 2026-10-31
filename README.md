@@ -186,4 +186,4 @@ MACATLAS_SIGN_ID="Developer ID Application: Name (TEAMID)" MACATLAS_NOTARY_PROFI
 
 ## License
 
-[MIT](LICENSE) © m4rcelnoel
+[MIT](LICENSE) © m4rcelnoel · made by [buddster](https://buddster.de) – software & web development
