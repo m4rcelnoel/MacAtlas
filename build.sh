@@ -44,8 +44,15 @@ APP="$ROOT/electron/dist/$APP_NAME-darwin-arm64/$APP_NAME.app"
 
 if [ -n "$SIGN_ID" ]; then
   echo "→ Signing (Developer ID, hardened runtime)"
-  codesign --force --deep --timestamp --options runtime \
-    --entitlements "$ROOT/electron/entitlements.plist" --sign "$SIGN_ID" "$APP"
+  # Sign inside-out: --deep misses Electron's dylibs in Libraries/ and the crashpad handler,
+  # which notarization rejects. Order: loose Mach-O files → frameworks → helper apps → app.
+  sign() { codesign --force --timestamp --options runtime --entitlements "$ROOT/electron/entitlements.plist" --sign "$SIGN_ID" "$1"; }
+  while IFS= read -r -d '' f; do
+    if file -b "$f" | grep -q "Mach-O"; then sign "$f"; fi
+  done < <(find "$APP/Contents/Frameworks" -type f ! -path "*/_CodeSignature/*" -print0)
+  while IFS= read -r -d '' f; do sign "$f"; done < <(find "$APP/Contents/Frameworks" -maxdepth 1 -name "*.framework" -print0)
+  while IFS= read -r -d '' f; do sign "$f"; done < <(find "$APP/Contents/Frameworks" -maxdepth 1 -name "*.app" -print0)
+  sign "$APP"
 else
   echo "→ Signing (ad hoc)"
   codesign --force --deep --sign - "$APP"
