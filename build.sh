@@ -28,7 +28,15 @@ if [ -n "$NOTARY_PROFILE" ]; then
 elif [ -n "$NOTARY_KEY" ]; then
   NOTARY_AUTH=(--key "$NOTARY_KEY" --key-id "${MACATLAS_NOTARY_KEY_ID:?}" --issuer "${MACATLAS_NOTARY_ISSUER:?}")
 fi
-notarize() { xcrun notarytool submit "$1" "${NOTARY_AUTH[@]}" --wait && xcrun stapler staple "$2"; }
+# Stapling fetches the ticket from Apple's CDN; retry because it occasionally drops the connection
+staple() {
+  for attempt in 1 2 3 4 5; do
+    xcrun stapler staple "$1" && return 0
+    echo "Stapling failed (attempt $attempt), retrying in 15 s …"; sleep 15
+  done
+  return 1
+}
+notarize() { xcrun notarytool submit "$1" "${NOTARY_AUTH[@]}" --wait && staple "$2"; }
 
 cd "$ROOT/electron"
 [ -d node_modules ] || npm install --no-audit --no-fund
