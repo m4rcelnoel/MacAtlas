@@ -1,0 +1,36 @@
+MacAtlas — Installation
+=======================
+
+1. Ziehe „MacAtlas.app" in den Ordner „Applications".
+
+2. ERSTER START: Rechtsklick auf die App → „Öffnen" (nicht Doppelklick),
+   dann im Dialog nochmal „Öffnen" bestätigen. Danach startet sie normal.
+
+   Falls macOS „ist beschädigt" meldet: Doppelklick auf die mitgelieferte
+   Datei „Erste Hilfe wenn Mac es blockiert.command".
+
+3. Beim ersten Start ist die App leer. Klick auf „Mac scannen".
+   Der Scan dauert 30–60 s und erfasst Hardware, alle Programme und
+   Pakete, Updates, Speicherplatz, Sicherheit und Hintergrunddienste.
+
+4. Umzug auf einen neuen Mac:
+   - Alter Mac: Export (⌘E) und unter „Einstellungen mitnehmen"
+     ein Einstellungspaket sichern.
+   - Neuer Mac: Datei importieren (⌘I) → Seite „Umzug" führt Schritt
+     für Schritt durch Homebrew, Programme, App Store, Entwickler-Pakete
+     und VS Code. Das Einstellungspaket entpacken und
+     „Wiederherstellen.command" doppelklicken.
+   Alternativ mit iCloud Drive: in den Einstellungen „Scans mit anderen
+   Macs teilen" einschalten – alle Macs erscheinen unter „Meine Macs".
+
+5. Einstellungen (⌘,): Sprache Deutsch/English, Hell/Dunkel, Start bei
+   Anmeldung, Menüleiste, automatischer Scan, Mitteilungen.
+
+Voraussetzungen auf dem Ziel-Mac (optional, einzeln):
+   - Homebrew       https://brew.sh
+   - mas            brew install mas
+   - docker         Docker Desktop
+   - code           VS Code CLI im PATH
+   - python3        kommt mit Xcode CLT (zwingend)
+
+Fragen, Fehler, Ideen: https://github.com/m4rcelnoel/MacAtlas/issues

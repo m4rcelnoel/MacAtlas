@@ -1,0 +1,18 @@
+# Dependencies & build output
+electron/node_modules/
+electron/dist/
+build/
+
+# Local test/preview data (contains real machine data)
+inventory.json
+history-test.json
+snapshot-test.json
+*.macatlas.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store
