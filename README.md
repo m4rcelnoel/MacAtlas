@@ -86,7 +86,7 @@ open "macatlas://scan"
 
 1. Download `MacAtlas.dmg` from the [latest release](https://github.com/m4rcelnoel/MacAtlas/releases).
 2. Drag MacAtlas into *Applications*.
-3. **First launch:** right-click the app → *Open* → *Open*. The app is ad-hoc signed (not notarized), so macOS asks once. If macOS says the app "is damaged":
+3. **First launch:** releases built without Developer ID signing are ad-hoc signed, so macOS asks once: right-click the app → *Open* → *Open*. If macOS says the app "is damaged":
 
    ```bash
    xattr -dr com.apple.quarantine /Applications/MacAtlas.app
@@ -141,14 +141,36 @@ App data lives in `~/Library/Application Support/MacAtlas/` (`scan/`, `history/`
 
 GitHub Actions runs on every push and pull request: JavaScript tests and lint, ShellCheck, Python tests on the macOS system Python and on Python 3.12, and an ad-hoc signed DMG build on an Apple Silicon runner (uploaded as an artifact). Pushing a tag like `v1.2.0` publishes a GitHub Release with the DMG attached.
 
-### Notarization (optional)
+### Signing & notarization (optional)
 
-With an Apple Developer account, `build.sh` signs with Developer ID and the hardened runtime and notarizes app and DMG, so no warning appears on other Macs:
+With an Apple Developer membership the app is signed with Developer ID and notarized by Apple – it then opens with a double-click on any Mac, without warnings.
+
+**One-time setup**
+
+1. Create a *Developer ID Application* certificate: Xcode → Settings → Accounts → your team → Manage Certificates → **+** → *Developer ID Application* (requires the Account Holder role). It lands in your login keychain.
+2. Store notarization credentials (uses an [app-specific password](https://account.apple.com)):
+
+   ```bash
+   xcrun notarytool store-credentials macatlas-notary --apple-id <apple-id> --team-id <TEAMID>
+   ```
+
+**Local build**
 
 ```bash
-xcrun notarytool store-credentials macatlas-notary --apple-id <mail> --team-id <TEAMID>
 MACATLAS_SIGN_ID="Developer ID Application: Name (TEAMID)" MACATLAS_NOTARY_PROFILE=macatlas-notary ./build.sh
 ```
+
+**CI** – add these repository secrets (Settings → Secrets and variables → Actions) and every build is signed and notarized automatically; without them CI produces an ad-hoc signed DMG:
+
+| Secret | Content |
+|---|---|
+| `MACOS_CERT_P12` | Developer ID certificate + private key exported from Keychain Access as `.p12`, base64-encoded (`base64 -i cert.p12 \| pbcopy`) |
+| `MACOS_CERT_PASSWORD` | Password chosen when exporting the `.p12` |
+| `NOTARY_KEY_P8` | Content of an App Store Connect API key (`AuthKey_XXXX.p8`, role *Developer*) |
+| `NOTARY_KEY_ID` | The key's ID |
+| `NOTARY_ISSUER_ID` | Issuer ID shown on the App Store Connect *Keys* page |
+
+`build.sh` signs with the hardened runtime (`electron/entitlements.plist`), notarizes app and DMG and staples the tickets.
 
 ## License
 

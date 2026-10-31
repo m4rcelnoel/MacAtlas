@@ -10,6 +10,8 @@
 #     MACATLAS_NOTARY_PROFILE="macatlas-notary" ./build.sh
 #   Create the notary profile once with:
 #     xcrun notarytool store-credentials macatlas-notary --apple-id <mail> --team-id <TEAMID>
+#   Or (CI) with an App Store Connect API key instead of a profile:
+#     MACATLAS_NOTARY_KEY=/path/AuthKey_XXXX.p8 MACATLAS_NOTARY_KEY_ID=XXXX MACATLAS_NOTARY_ISSUER=<uuid>
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 APP_NAME="MacAtlas"
@@ -17,7 +19,16 @@ OLD_APP="Mac Inventory"   # previous app name – removed when installing
 INSTALL=1
 [ "${1:-}" = "--no-install" ] && INSTALL=0
 SIGN_ID="${MACATLAS_SIGN_ID:-}"
-NOTARY="${MACATLAS_NOTARY_PROFILE:-}"
+NOTARY_PROFILE="${MACATLAS_NOTARY_PROFILE:-}"
+NOTARY_KEY="${MACATLAS_NOTARY_KEY:-}"
+# notarytool authentication: keychain profile (local) or API key (CI)
+NOTARY_AUTH=()
+if [ -n "$NOTARY_PROFILE" ]; then
+  NOTARY_AUTH=(--keychain-profile "$NOTARY_PROFILE")
+elif [ -n "$NOTARY_KEY" ]; then
+  NOTARY_AUTH=(--key "$NOTARY_KEY" --key-id "${MACATLAS_NOTARY_KEY_ID:?}" --issuer "${MACATLAS_NOTARY_ISSUER:?}")
+fi
+notarize() { xcrun notarytool submit "$1" "${NOTARY_AUTH[@]}" --wait && xcrun stapler staple "$2"; }
 
 cd "$ROOT/electron"
 [ -d node_modules ] || npm install --no-audit --no-fund
@@ -41,12 +52,11 @@ else
 fi
 codesign --verify --deep --strict "$APP"
 
-if [ -n "$SIGN_ID" ] && [ -n "$NOTARY" ]; then
+if [ -n "$SIGN_ID" ] && [ ${#NOTARY_AUTH[@]} -gt 0 ]; then
   echo "→ Notarizing (takes a few minutes)"
   ZIP="$(mktemp -d)/$APP_NAME.zip"
   ditto -c -k --keepParent "$APP" "$ZIP"
-  xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY" --wait
-  xcrun stapler staple "$APP"
+  notarize "$ZIP" "$APP"
 fi
 
 if [ "$INSTALL" = 1 ]; then
@@ -74,10 +84,7 @@ hdiutil create -volname "$APP_NAME" -srcfolder "$STAGE" -ov -format UDZO -fs HFS
 rm -rf "$STAGE"
 if [ -n "$SIGN_ID" ]; then
   codesign --force --timestamp --sign "$SIGN_ID" "$DMG"
-  if [ -n "$NOTARY" ]; then
-    xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY" --wait
-    xcrun stapler staple "$DMG"
-  fi
+  if [ ${#NOTARY_AUTH[@]} -gt 0 ]; then notarize "$DMG" "$DMG"; fi
 else
   codesign --force --sign - "$DMG"
 fi
