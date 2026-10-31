@@ -9,7 +9,7 @@
 - CSV export, URL scheme (`macatlas://scan`, `report`, `csv`, `export`, `open/<page>`), change warnings, renewal reminders.
 - Optional notarization in `build.sh`.
 - Hardening: sandboxed renderer, strict CSP, blocked navigation, IPC callbacks no longer receive the event object.
-- Fixes: major-version updates with a different number of version parts were not detected; migration page jumped back to Compare after a rescan; background scans switched away from an open snapshot; unhandled error when exporting a broken snapshot.
+- Fixes: major-version updates with a different number of version parts were not detected; migration page jumped back to Compare after a rescan; background scans switched away from an open snapshot; unhandled error when exporting a broken snapshot; quoting bug in the first-aid script of the DMG.
 - Unit tests, static checks and CI with DMG builds and GitHub Releases.
 
 ## 1.1.0
