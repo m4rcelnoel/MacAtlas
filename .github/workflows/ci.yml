@@ -63,6 +63,10 @@ jobs:
     name: Build DMG
     needs: [lint-and-test-js, test-python]
     runs-on: macos-15   # Apple Silicon runner, matches the arm64 build
+    env:
+      # Secrets can't be used in step conditions directly; expose whether they exist
+      HAS_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
+      HAS_NOTARY: ${{ secrets.NOTARY_KEY_P8 != '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -80,7 +84,7 @@ jobs:
         env:
           CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-        if: env.CERT_P12 != ''
+        if: env.HAS_CERT == 'true'
         run: |
           KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
@@ -97,8 +101,8 @@ jobs:
       - name: Prepare notarization key
         env:
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
-        if: steps.cert.outputs.identity != '' && env.NOTARY_KEY_P8 != ''
-        run: echo "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
+        if: env.HAS_NOTARY == 'true' && steps.cert.outputs.identity != ''
+        run: printf '%s\n' "$NOTARY_KEY_P8" > "$RUNNER_TEMP/notary.p8"
       - name: Build
         env:
           MACATLAS_SIGN_ID: ${{ steps.cert.outputs.identity }}
@@ -110,7 +114,13 @@ jobs:
       - name: Verify signature
         run: |
           codesign --verify --deep --strict "electron/dist/MacAtlas-darwin-arm64/MacAtlas.app"
-          spctl --assess --type execute -vv "electron/dist/MacAtlas-darwin-arm64/MacAtlas.app" || echo "Not notarized (ad-hoc build)"
+          if [ "$HAS_CERT" = "true" ] && [ "$HAS_NOTARY" = "true" ]; then
+            # Signing secrets are configured, so anything but a notarized build is an error
+            spctl --assess --type execute -vv "electron/dist/MacAtlas-darwin-arm64/MacAtlas.app"
+            xcrun stapler validate build/MacAtlas.dmg
+          else
+            spctl --assess --type execute -vv "electron/dist/MacAtlas-darwin-arm64/MacAtlas.app" || echo "Not notarized (ad-hoc build)"
+          fi
       - uses: actions/upload-artifact@v7
         with:
           name: MacAtlas-dmg
