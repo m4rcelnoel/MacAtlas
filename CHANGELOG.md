@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1
+
+- Settings → About shows the app icon, version and "Made by buddster" with links to buddster.de, the source code and GitHub issues; the macOS About panel credits buddster too.
+- Release builds retry stapling and ticket validation when Apple's ticket service drops the connection.
+- README: rewritten install section with a direct download link, requirements, updating and uninstalling.
+
 ## 1.2.0
 
 - Renamed from *Mac Inventory* to **MacAtlas**; existing data is migrated on first launch.
