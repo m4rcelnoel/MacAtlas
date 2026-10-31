@@ -117,7 +117,8 @@ jobs:
           if [ "$HAS_CERT" = "true" ] && [ "$HAS_NOTARY" = "true" ]; then
             # Signing secrets are configured, so anything but a notarized build is an error
             spctl --assess --type execute -vv "electron/dist/MacAtlas-darwin-arm64/MacAtlas.app"
-            xcrun stapler validate build/MacAtlas.dmg
+            # validate talks to Apple's ticket service, which sometimes drops the connection
+            for i in 1 2 3 4 5; do xcrun stapler validate build/MacAtlas.dmg && break; [ $i = 5 ] && exit 1; sleep 15; done
           else
             spctl --assess --type execute -vv "electron/dist/MacAtlas-darwin-arm64/MacAtlas.app" || echo "Not notarized (ad-hoc build)"
           fi
