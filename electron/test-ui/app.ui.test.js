@@ -137,6 +137,8 @@ test("main window: sidebar, quick open, lists, selection", async (t) => {
       await page.waitForSelector("#changelogSheet .cl-sec");
       assert.ok(await page.locator("#changelogSheet .cl-sec").count() >= 3);
       assert.match(await page.locator("#changelogSheet").innerText(), /1\.2\.1/);
+      // German UI → German changelog; unreleased changes are labelled as already included
+      assert.match(await page.locator("#changelogSheet").innerText(), /Schon enthalten[\s\S]*Auswahl per Häkchen/);
       await page.click('[data-cl="close"]');
       assert.equal(await page.locator("#changelogSheet").count(), 0);
     });

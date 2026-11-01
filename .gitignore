@@ -4,6 +4,7 @@ electron/dist/
 build/
 # copied in by build.sh
 electron/CHANGELOG.md
+electron/CHANGELOG.de.md
 
 # Local test/preview data (contains real machine data)
 inventory.json

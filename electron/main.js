@@ -1265,12 +1265,13 @@ async function installAppUpdate() {
   }
 }
 // ── What's new ───────────────────────────────────────────────────────
-// CHANGELOG.md is copied next to main.js by build.sh; from source it lives one level up.
+// CHANGELOG.md / CHANGELOG.de.md are copied next to main.js by build.sh; from source they live one level up.
 // After an update, the first request also returns the version the user came from.
 let whatsNewSince = null;
 ipcMain.handle("changelog:get", () => {
   let text = "";
-  for (const f of [path.join(__dirname, "CHANGELOG.md"), path.join(__dirname, "..", "CHANGELOG.md")]) {
+  const name = lang() === "de" ? "CHANGELOG.de.md" : "CHANGELOG.md";
+  for (const f of [path.join(__dirname, name), path.join(__dirname, "..", name)]) {
     try { text = fs.readFileSync(f, "utf8").slice(0, 200000); break; } catch {}
   }
   const since = whatsNewSince;

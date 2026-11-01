@@ -427,7 +427,7 @@ const I18N_EN = {
   "Keine Schreibrechte – meist beim Ruby oder Python von macOS. Diese Pakete gehören zum System und sollten nicht aktualisiert werden.": "No write permission – usually macOS' own Ruby or Python. Those packages belong to the system and shouldn't be updated.",
   "MacAtlas löscht nie selbst etwas. Befehle laufen nur nach deiner Bestätigung.": "MacAtlas never deletes anything on its own. Commands only run after you confirm.",
   // what's new
-  "In Arbeit": "In progress", "Neu": "New", "Was ist neu": "What's New", "MacAtlas wurde aktualisiert": "MacAtlas was updated",
+  "Schon enthalten": "Already included", "erscheint offiziell mit dem nächsten Release": "officially part of the next release", "Neu": "New", "Was ist neu": "What's New", "MacAtlas wurde aktualisiert": "MacAtlas was updated",
   "Version {a} → {b}": "Version {a} → {b}", "Alle Releases": "All Releases", "Änderungen in jeder Version von MacAtlas.": "Changes in every version of MacAtlas.",
   "Anzeigen": "Show",
   "Wird mitgeliefert – MacAtlas aktualisiert oder installiert es nicht.": "Ships with the system – MacAtlas never updates or installs it.",

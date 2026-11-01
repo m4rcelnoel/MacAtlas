@@ -43,7 +43,7 @@ cd "$ROOT/electron"
 [ -f icon.icns ] || { python3 "$ROOT/make_icon.py" && cp "$ROOT/build/icon.icns" icon.icns; }
 
 # Settings → About → "What's new" reads the changelog from inside the app
-cp "$ROOT/CHANGELOG.md" "$ROOT/electron/CHANGELOG.md"
+cp "$ROOT/CHANGELOG.md" "$ROOT/CHANGELOG.de.md" "$ROOT/electron/"
 
 echo "→ Packaging"
 rm -rf "dist/$APP_NAME-darwin-arm64"

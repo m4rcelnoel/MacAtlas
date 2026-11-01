@@ -54,7 +54,7 @@ if (!window.inventory) {
     onScanDone: noop, onInventoryChanged: noop, onToast: noop,
     appUpdate: async () => ({ available: null, current: "dev", checked: null }), checkAppUpdate: async () => ({ available: null, current: "dev", checked: Date.now() }),
     testNotification: async () => true, installAppUpdate: async () => false,
-    changelog: async () => { try { return { text: await (await fetch("../../CHANGELOG.md")).text(), since: null, version: "dev" }; } catch { return null; } }, onAppUpdate: noop, onAppUpdateProgress: noop,
+    changelog: async () => { try { return { text: await (await fetch(LANG === "de" ? "../../CHANGELOG.de.md" : "../../CHANGELOG.md")).text(), since: null, version: "dev" }; } catch { return null; } }, onAppUpdate: noop, onAppUpdateProgress: noop,
   };
 }
 
@@ -1384,7 +1384,9 @@ function changelogHtml(md, since) {
     const [title, ...lines] = sec.split("\n");
     const items = lines.filter((l) => /^\s*[-*] /.test(l)).map((l) => `<li>${inline(l.replace(/^\s*[-*] /, ""))}</li>`).join("");
     const v = title.trim();
-    return `<section class="cl-sec${newer(v) ? " new" : ""}"><h3>${v === "Unreleased" ? t("In Arbeit") : esc(v)}${newer(v) && since ? ` <span class="pill blue">${t("Neu")}</span>` : ""}</h3><ul>${items}</ul></section>`;
+    const head = v === "Unreleased"
+      ? `${t("Schon enthalten")} <span class="cl-note">${t("erscheint offiziell mit dem nächsten Release")}</span>` : esc(v);
+    return `<section class="cl-sec${newer(v) ? " new" : ""}"><h3>${head}${newer(v) && since ? ` <span class="pill blue">${t("Neu")}</span>` : ""}</h3><ul>${items}</ul></section>`;
   }).join("");
 }
 function cmpVersion(a, b) {

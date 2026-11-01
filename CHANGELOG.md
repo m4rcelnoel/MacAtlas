@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+German version: [CHANGELOG.de.md](CHANGELOG.de.md) – shown in MacAtlas under Settings → *What's New*.
+
+## 1.3.0
 
 - Checkbox selection on Compare, Migration, Updates and Storage: the install, update and cleanup scripts only contain ticked entries. Each group has *All*/*None*, and the selection is remembered.
 - Detail panel: click any entry to see its update, install/update/uninstall commands with copy buttons, note and all known facts.
@@ -16,7 +18,7 @@
 - Test button for notifications in Settings.
 - Packages that ship with the system – gems of macOS' Ruby, Ruby's own default gems, the Python packages of the Command Line Tools – are tagged *System*: still listed, but never offered as updates, put into install scripts or counted as missing in Compare. Permission errors get an explanation.
 - MacAtlas now scans the Ruby you actually use (Homebrew, rbenv, asdf, mise …) instead of only the first `gem` in PATH, and runs its updates with that Ruby.
-- Settings → *What's New* shows this changelog; it also opens once after an update.
+- Settings → *What's New* shows this changelog in English or German; it also opens once after an update.
 - Fix: pip packages whose name is as long as the column were read with their version in the name.
 - New app and menu bar icon.
 - UI tests with Playwright in CI; releases can update a Homebrew tap automatically.
