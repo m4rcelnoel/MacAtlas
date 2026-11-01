@@ -147,7 +147,38 @@ function parseAppUrl(url) {
   return parts.length ? { action: parts[0], arg: parts[1] || null } : null;
 }
 
+/** Compares release versions like "v1.3.0" and "1.2.10": 1 if a is newer, -1 if older, 0 if equal. */
+function compareVersions(a, b) {
+  const parse = (v) => String(v || "").replace(/^v/i, "").split(/[.-]/).map((x) => parseInt(x, 10) || 0);
+  const x = parse(a), y = parse(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0) ? 1 : -1;
+  }
+  return 0;
+}
+
+const RELEASE_PREFIX = "https://github.com/m4rcelnoel/MacAtlas/releases/";
+/**
+ * Picks what the updater needs from a GitHub "latest release" response.
+ * Returns null for drafts, pre-releases and releases without the DMG; the download URL
+ * must point at this repository's releases.
+ */
+function releaseInfo(rel) {
+  if (!rel || rel.draft || rel.prerelease || !rel.tag_name) return null;
+  const dmg = (rel.assets || []).find((a) => a && a.name === "MacAtlas.dmg");
+  const url = dmg ? String(dmg.browser_download_url || "") : "";
+  if (!url.startsWith(RELEASE_PREFIX + "download/")) return null;
+  const page = String(rel.html_url || "");
+  return {
+    version: String(rel.tag_name).replace(/^v/i, ""),
+    url,
+    size: dmg.size || 0,
+    page: page.startsWith(RELEASE_PREFIX) ? page : RELEASE_PREFIX + "latest",
+    notes: String(rel.body || "").slice(0, 4000),
+  };
+}
+
 module.exports = {
   SAFE_TOKEN, SAFE_STORAGE, REDACTED, safeHost, nextRenewal, isoDate, storageReclaimable, compactInventory,
-  significantChanges, buildBrewfile, buildCsv, redact, parseAppUrl,
+  significantChanges, buildBrewfile, buildCsv, redact, parseAppUrl, compareVersions, releaseInfo,
 };

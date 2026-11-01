@@ -26,14 +26,14 @@ jobs:
       - name: Syntax check
         working-directory: electron
         run: |
-          for f in main.js preload.js lib/core.js renderer/app.js renderer/i18n.js; do node --check "$f"; done
+          for f in main.js preload.js lib/core.js renderer/app.js renderer/i18n.js test-ui/app.ui.test.js; do node --check "$f"; done
       - name: Unit & static tests
         working-directory: electron
         run: npm test
       - name: Shell scripts
         run: |
-          bash -n build.sh electron/scripts/scan.sh
-          shellcheck --severity=error build.sh electron/scripts/scan.sh "electron/dmg/Erste Hilfe wenn Mac es blockiert.command"
+          bash -n build.sh electron/scripts/scan.sh .github/scripts/update-homebrew-tap.sh
+          shellcheck --severity=error build.sh electron/scripts/scan.sh .github/scripts/update-homebrew-tap.sh "electron/dmg/Erste Hilfe wenn Mac es blockiert.command"
 
   test-python:
     name: Python tests (${{ matrix.name }})
@@ -77,6 +77,9 @@ jobs:
       - name: Install dependencies
         working-directory: electron
         run: npm ci --no-audit --no-fund
+      - name: UI tests (Electron + Playwright)
+        working-directory: electron
+        run: npm run test:ui
       # Developer ID signing + notarization when the repository secrets are set,
       # otherwise an ad-hoc signed build (see README → Notarization)
       - name: Import Developer ID certificate
@@ -135,7 +138,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: MacAtlas-dmg
@@ -145,3 +151,9 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" MacAtlas.dmg \
             --repo "$GITHUB_REPOSITORY" --title "MacAtlas ${GITHUB_REF_NAME#v}" --generate-notes
+      # brew install --cask m4rcelnoel/tap/macatlas – only when the tap token is configured
+      - name: Update Homebrew tap
+        if: env.HAS_TAP_TOKEN == 'true'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: .github/scripts/update-homebrew-tap.sh "${GITHUB_REF_NAME#v}" MacAtlas.dmg

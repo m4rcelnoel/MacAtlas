@@ -1,12 +1,14 @@
 // Bridge between the sandboxed UI and the main process. Callbacks never receive
 // the IpcRendererEvent (it would expose ipcRenderer to the page).
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("inventory", {
   read: () => ipcRenderer.invoke("inventory:read"),
   rescan: () => ipcRenderer.invoke("inventory:rescan"),
   export: () => ipcRenderer.invoke("inventory:export"),
   import: () => ipcRenderer.invoke("inventory:import"),
+  // Dropped files: the page only gets File objects, the path is resolved here
+  importFile: (file) => ipcRenderer.invoke("inventory:importPath", webUtils.getPathForFile(file)),
   switchToOwn: () => ipcRenderer.invoke("inventory:switchToOwn"),
   reveal: (name) => ipcRenderer.invoke("item:reveal", name),
   openUrl: (url) => ipcRenderer.invoke("url:open", url),
@@ -46,4 +48,10 @@ contextBridge.exposeInMainWorld("inventory", {
   onScanDone: (cb) => ipcRenderer.on("scan:done", (_e, p) => cb(p)),
   onInventoryChanged: (cb) => ipcRenderer.on("inventory:changed", () => cb()),
   onToast: (cb) => ipcRenderer.on("toast", (_e, p) => cb(p)),
+  testNotification: () => ipcRenderer.invoke("notify:test"),
+  appUpdate: () => ipcRenderer.invoke("appupdate:state"),
+  checkAppUpdate: () => ipcRenderer.invoke("appupdate:check"),
+  installAppUpdate: () => ipcRenderer.invoke("appupdate:install"),
+  onAppUpdate: (cb) => ipcRenderer.on("appupdate:state", (_e, s) => cb(s)),
+  onAppUpdateProgress: (cb) => ipcRenderer.on("appupdate:progress", (_e, p) => cb(p)),
 });

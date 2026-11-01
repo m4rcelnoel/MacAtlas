@@ -5,6 +5,16 @@
 - Checkbox selection on Compare, Migration, Updates and Storage: the install, update and cleanup scripts only contain ticked entries. Each group has *All*/*None*, and the selection is remembered.
 - Detail panel: click any entry to see its update, install/update/uninstall commands with copy buttons, note and all known facts.
 - Lists can be filtered (with update, Homebrew, App Store, no package source, with note, Intel only, unused), sorted by name, size, last use or source, and searched within the list.
+- Quick Open (⌘K): jump to any page, entry or action.
+- Sidebar sections can be collapsed; ↑/↓ moves through lists (the detail panel follows) and the sidebar; better VoiceOver labels and visible focus.
+- First launch shows a short three-step introduction and warns when the Command Line Tools are missing.
+- The scan progress counts what it finds as it goes.
+- Drop an exported scan onto the window to open it.
+- New package sources: Rust (`cargo install`), Go tools, pipx, uv tools, Composer, mise, asdf and MacPorts – including the install script for a new Mac.
+- MacAtlas updates itself: a daily check of GitHub Releases, then download, signature check, replace and restart from Settings.
+- Test button for notifications in Settings.
+- New app and menu bar icon.
+- UI tests with Playwright in CI; releases can update a Homebrew tap automatically.
 
 ## 1.2.1
 

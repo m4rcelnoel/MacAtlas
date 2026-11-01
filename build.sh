@@ -47,7 +47,7 @@ rm -rf "dist/$APP_NAME-darwin-arm64"
 npx electron-packager . "$APP_NAME" --platform=darwin --arch=arm64 --out=dist --overwrite \
   --app-bundle-id=de.marcelnoel.macatlas --icon=icon.icns \
   --protocol=macatlas --protocol-name="MacAtlas" \
-  --ignore="^/dist($|/)" --ignore="^/dmg($|/)" --ignore="^/test($|/)" --ignore="^/entitlements\.plist$" >/dev/null
+  --ignore="^/dist($|/)" --ignore="^/dmg($|/)" --ignore="^/test(-ui)?($|/)" --ignore="^/entitlements\.plist$" >/dev/null
 APP="$ROOT/electron/dist/$APP_NAME-darwin-arm64/$APP_NAME.app"
 
 if [ -n "$SIGN_ID" ]; then

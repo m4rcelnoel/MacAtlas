@@ -664,6 +664,127 @@ def parse_vscode():
     return out
 
 
+def _pkg(name, ver, cmd, url=""):
+    return {"name": name, "version": ver, "install_cmd": cmd, "install_url": url}
+
+
+def parse_cargo():
+    # "ripgrep v14.1.0:" followed by indented binary names
+    out = []
+    for line in read_lines("cargo_install.txt"):
+        m = re.match(r"^(\S+) v([^\s:]+)(?: \(([^)]*)\))?:$", line)
+        if m:
+            name, ver, src = m.groups()
+            # Installed from a local path or git: can't be reinstalled by name alone
+            cmd = f"cargo install {name}" if not src or src.startswith("registry") else None
+            out.append(_pkg(name, ver, cmd, f"https://crates.io/crates/{urllib.parse.quote(name)}"))
+    return out
+
+
+def parse_go():
+    out = []
+    for line in read_lines("go_bins.txt"):
+        parts = line.split("|")
+        if len(parts) < 3 or not parts[1]:
+            continue
+        name, path, ver = parts[0], parts[1], parts[2]
+        # "(devel)" = built from a local checkout, not installable by path
+        devel = ver == "(devel)"
+        out.append(_pkg(name, "" if devel else ver.lstrip("v"), None if devel else f"go install {path}@latest",
+                        f"https://pkg.go.dev/{path}"))
+    return out
+
+
+def parse_pipx():
+    out = []
+    for line in read_lines("pipx.txt"):
+        parts = line.split()
+        if parts:
+            out.append(_pkg(parts[0], parts[1] if len(parts) > 1 else "", f"pipx install {parts[0]}",
+                            f"https://pypi.org/project/{urllib.parse.quote(parts[0])}/"))
+    return out
+
+
+def parse_uv():
+    out = []
+    for line in read_lines("uv_tools.txt"):
+        m = re.match(r"^(\S+) v(\S+)", line)
+        if m:
+            out.append(_pkg(m.group(1), m.group(2), f"uv tool install {m.group(1)}",
+                            f"https://pypi.org/project/{urllib.parse.quote(m.group(1))}/"))
+    return out
+
+
+def parse_composer():
+    data = read_json("composer.json") or {}
+    out = []
+    for p in data.get("installed", []) if isinstance(data, dict) else []:
+        name = p.get("name")
+        if name:
+            out.append(_pkg(name, str(p.get("version", "")).lstrip("v"), f"composer global require {name}",
+                            f"https://packagist.org/packages/{name}"))
+    return out
+
+
+def parse_mise():
+    # {"node": [{"version": "22.1.0", "installed": true, "active": true, …}], …}
+    data = read_json("mise.json") or {}
+    out = []
+    for tool, versions in (data.items() if isinstance(data, dict) else []):
+        for v in versions if isinstance(versions, list) else []:
+            if v.get("installed", True) and v.get("version"):
+                out.append(_pkg(f"{tool}@{v['version']}", v["version"], f"mise use -g {tool}@{v['version']}",
+                                "https://mise.jdx.dev/"))
+    return out
+
+
+def parse_asdf():
+    out = []
+    for line in read_lines("asdf.txt"):
+        tool, _, ver = line.partition("|")
+        if tool and ver:
+            out.append(_pkg(f"{tool} {ver}", ver, f"asdf install {tool} {ver}", "https://asdf-vm.com/"))
+    return out
+
+
+def parse_macports():
+    # "  ripgrep @14.1.0_0+variant (active)"
+    out = []
+    for line in read_lines("macports.txt"):
+        m = re.match(r"^\s*(\S+) @([^+\s]+)", line)
+        if m:
+            ver = re.sub(r"_\d+$", "", m.group(2))
+            out.append(_pkg(m.group(1), ver, f"sudo port install {m.group(1)}",
+                            f"https://ports.macports.org/port/{urllib.parse.quote(m.group(1))}/"))
+    # A port can be installed in several versions; keep one entry per name
+    return list({p["name"]: p for p in out}.values())
+
+
+EXTRA_SOURCES = [
+    ("cargo", "Rust (cargo)", "`cargo install <name>`", parse_cargo),
+    ("go", "Go-Tools", "`go install <path>@latest`", parse_go),
+    ("pipx", "pipx", "`pipx install <name>`", parse_pipx),
+    ("uv", "uv-Tools", "`uv tool install <name>`", parse_uv),
+    ("composer", "Composer", "`composer global require <name>`", parse_composer),
+    ("mise", "mise", "`mise use -g <tool>@<version>`", parse_mise),
+    ("asdf", "asdf", "`asdf install <tool> <version>`", parse_asdf),
+    ("macports", "MacPorts", "`sudo port install <name>`", parse_macports),
+]
+
+
+def extra_package_categories():
+    """Optional package managers; each one is skipped when it isn't installed or fails to parse."""
+    cats = []
+    for cid, label, desc, fn in EXTRA_SOURCES:
+        try:
+            items = fn()
+        except Exception as e:
+            print(f"warning: {cid}: {e}")
+            items = []
+        cats.append({"id": cid, "label": label, "icon": "📦", "description": desc, "items": items})
+    return cats
+
+
 def parse_docker_images():
     out = []
     for line in read_lines("docker_images.txt"):
@@ -1024,6 +1145,7 @@ inventory = {
             "description": "`gem install <name>`",
             "items": parse_gems(),
         },
+        *extra_package_categories(),
         {
             "id": "vscode", "label": "VS Code Extensions", "icon": "🧩",
             "description": "`code --install-extension <id>`",

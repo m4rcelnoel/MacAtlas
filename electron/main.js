@@ -13,7 +13,8 @@ app.setName("MacAtlas");
   const appData = app.getPath("appData");
   const newDir = path.join(appData, "MacAtlas"), oldDir = path.join(appData, "mac-inventory");
   try { if (!fs.existsSync(newDir) && fs.existsSync(oldDir)) fs.renameSync(oldDir, newDir); } catch {}
-  app.setPath("userData", newDir);
+  // UI tests run against a throwaway data folder
+  app.setPath("userData", process.env.MACATLAS_DATA_DIR || newDir);
 }
 
 // Only one instance (login item + menu bar icon would otherwise start a second)
@@ -41,6 +42,9 @@ const DEFAULTS = {
   remindRenewals: true, // notify 7 days before a subscription renews (from notes)
   syncEnabled: false,   // share each scan with other Macs via a (iCloud) folder
   syncDir: null,
+  updateCheck: true,    // look for a new MacAtlas release on GitHub once a day
+  lastUpdateCheck: null,
+  notifiedVersion: null,
   reminded: {},
   lastUpdateCount: null,
   bounds: null,
@@ -66,6 +70,8 @@ const STRINGS = {
     notifyOne: "1 neues Update gefunden – insgesamt {n}.", notifyMany: "{m} neue Updates gefunden – insgesamt {n}.",
     nothingToExport: "Noch nichts zu exportieren. Scanne zuerst deinen Mac.", exportTitle: "MacAtlas-Daten exportieren",
     exported: "Exportiert nach {p}", importTitle: "MacAtlas-Daten importieren", snapLoaded: "Snapshot von {h} geladen",
+    notifyTest: "So sehen Mitteilungen von MacAtlas aus. Ein Klick öffnet die Einstellungen.",
+    updAvailable: "MacAtlas {v} ist verfügbar.", updFailed: "Update fehlgeschlagen", updWrongSigner: "Das Update ist nicht vom MacAtlas-Entwickler signiert.",
     unknown: "unbekannt", importFailed: "Import fehlgeschlagen", invalidFile: "Datei ist kein gültiges MacAtlas-JSON.",
     brewfileTitle: "Brewfile exportieren", brewfileSaved: "Brewfile mit {n} Einträgen gesichert",
     scriptTitle: "Installationsskript sichern", shellScript: "Shell-Skript", pdfTitle: "Bericht als PDF sichern",
@@ -98,6 +104,8 @@ const STRINGS = {
     notifyOne: "1 new update found – {n} in total.", notifyMany: "{m} new updates found – {n} in total.",
     nothingToExport: "Nothing to export yet. Scan your Mac first.", exportTitle: "Export MacAtlas",
     exported: "Exported to {p}", importTitle: "Import MacAtlas", snapLoaded: "Loaded snapshot from {h}",
+    notifyTest: "This is how MacAtlas notifications look. Click to open Settings.",
+    updAvailable: "MacAtlas {v} is available.", updFailed: "Update failed", updWrongSigner: "The update is not signed by the MacAtlas developer.",
     unknown: "unknown", importFailed: "Import failed", invalidFile: "This file is not a valid MacAtlas JSON.",
     brewfileTitle: "Export Brewfile", brewfileSaved: "Saved Brewfile with {n} entries",
     scriptTitle: "Save Install Script", shellScript: "Shell script", pdfTitle: "Save Report as PDF",
@@ -333,17 +341,20 @@ function runScan(opts = {}) {
   // Own process group, so cancelling also stops brew/pip/gem started by the script
   const child = spawn("/bin/bash", [scanScript], { cwd: workDir, env, detached: true });
   scanChild = child;
-  let step = 0, stderr = "", buf = "";
+  let step = 0, label = "", stderr = "", buf = "";
+  const counts = {};
   child.stdout.on("data", (chunk) => {
     buf += chunk.toString();
     let i;
     while ((i = buf.indexOf("\n")) >= 0) {
       const line = buf.slice(0, i).trim();
       buf = buf.slice(i + 1);
-      if (line.startsWith("→")) {
-        step += 1;
-        send("scan:progress", { step, total: totalSteps, label: line.slice(1).trim() });
-      }
+      // "→ Step" starts a step, "+ key|n" reports what a step found so far
+      const found = line.match(/^\+ (\w+)\|(\d+)$/);
+      if (line.startsWith("→")) { step += 1; label = line.slice(1).trim(); }
+      else if (found) counts[found[1]] = Number(found[2]);
+      else continue;
+      send("scan:progress", { step, total: totalSteps, label, counts: { ...counts } });
     }
   });
   child.stderr.on("data", (c) => { stderr = (stderr + c.toString()).slice(-4000); });
@@ -472,6 +483,16 @@ ipcMain.handle("sync:choose", async () => {
 ipcMain.handle("sync:open", () => { fs.mkdirSync(syncDir(), { recursive: true }); shell.openPath(syncDir()); });
 
 // ── Subscription renewals (price/cycle/date stored with notes) ─────────
+// Settings → Notifications → "Send test": shows what a change warning looks like and
+// reveals whether macOS lets MacAtlas post notifications at all
+ipcMain.handle("notify:test", () => {
+  if (!Notification.isSupported()) return false;
+  const note = new Notification({ title: "MacAtlas", body: tr("notifyTest") });
+  note.on("click", () => showWindow("settings"));
+  note.show();
+  return true;
+});
+
 function checkRenewals() {
   if (!settings.remindRenewals || !Notification.isSupported()) return;
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -543,8 +564,17 @@ function checkAutoScan() {
 }
 
 // ── Settings IPC ──────────────────────────────────────────────────────
+// The scanner needs python3 from the Command Line Tools (or Xcode); the intro warns when they're missing
+let cltInstalled = null;
+function hasCommandLineTools() {
+  if (cltInstalled === null) {
+    try { require("child_process").execFileSync("/usr/bin/xcode-select", ["-p"], { timeout: 3000, stdio: "ignore" }); cltInstalled = true; }
+    catch { cltInstalled = false; }
+  }
+  return cltInstalled;
+}
 function publicSettings() {
-  const { bounds: _b, lastUpdateCount: _u, reminded: _r, ...rest } = settings;
+  const { bounds: _b, lastUpdateCount: _u, reminded: _r, notifiedVersion: _n, ...rest } = settings;
   return {
     ...rest,
     openAtLogin: app.getLoginItemSettings().openAtLogin,
@@ -556,6 +586,7 @@ function publicSettings() {
     dataDir: app.getPath("userData"),
     syncDirResolved: syncDir(),
     exportDir: autoDir(""),
+    commandLineTools: hasCommandLineTools(),
   };
 }
 
@@ -563,7 +594,7 @@ const VALID = {
   language: ["system", "de", "en"], theme: ["system", "light", "dark"], autoScan: ["off", "daily", "weekly"],
   historyMax: [25, 50, 100, 200, 500],
 };
-const BOOLS = ["showTray", "trayCount", "notify", "brewUpdate", "embedIcons", "warnChanges", "remindRenewals", "syncEnabled"];
+const BOOLS = ["showTray", "trayCount", "notify", "brewUpdate", "embedIcons", "warnChanges", "remindRenewals", "syncEnabled", "updateCheck"];
 
 function applySettings(patch) {
   if (!patch || typeof patch !== "object") return publicSettings();
@@ -731,8 +762,13 @@ async function importInventory() {
     filters: [{ name: "MacAtlas", extensions: ["json"] }],
   });
   if (result.canceled || !result.filePaths.length) return;
-  const src = result.filePaths[0];
+  importSnapshotFile(result.filePaths[0]);
+}
+
+// Shared by the open dialog and drag & drop onto the window
+function importSnapshotFile(src) {
   try {
+    if (path.extname(src).toLowerCase() !== ".json" || !fs.statSync(src).isFile()) throw new Error(tr("invalidFile"));
     const data = readSnapshot(src);
     const host = ((data.system && data.system.hostname) || "import").replace(/[^\w.-]/g, "_");
     const date = (data.generated_at || new Date().toISOString()).slice(0, 10);
@@ -752,6 +788,7 @@ function switchToOwn() {
 }
 
 ipcMain.handle("inventory:export", () => exportInventory());
+ipcMain.handle("inventory:importPath", (_e, p) => (typeof p === "string" && p ? importSnapshotFile(p) : null));
 
 async function exportBrewfile() {
   if (!win) showWindow();
@@ -1050,6 +1087,128 @@ ipcMain.handle("report:pdf", async (_e, { html, name }) => {
   return true;
 });
 
+// ── App updates ──────────────────────────────────────────────────────
+// Checks GitHub Releases once a day. Installing downloads the notarized DMG, checks that it is
+// signed by the same Developer ID team, replaces the app bundle after quitting and relaunches.
+const RELEASES_API = "https://api.github.com/repos/m4rcelnoel/MacAtlas/releases/latest";
+const TEAM_ID = "LN2679M6S2";
+let appUpdate = null;        // { version, url, size, page, notes } when a newer release exists
+let appUpdateBusy = false;
+
+async function checkAppUpdate(manual = false) {
+  if (!manual && !settings.updateCheck) return appUpdate;
+  try {
+    const res = await fetch(RELEASES_API, { headers: { "User-Agent": `MacAtlas/${app.getVersion()}`, Accept: "application/vnd.github+json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const info = core.releaseInfo(await res.json());
+    settings.lastUpdateCheck = Date.now();
+    appUpdate = info && core.compareVersions(info.version, app.getVersion()) > 0 ? info : null;
+    saveSettings();
+  } catch (e) {
+    if (manual) throw e;
+    return appUpdate;
+  }
+  send("appupdate:state", appUpdateState());
+  if (appUpdate && !manual && settings.notifiedVersion !== appUpdate.version && Notification.isSupported()) {
+    settings.notifiedVersion = appUpdate.version; saveSettings();
+    const note = new Notification({ title: "MacAtlas", body: tr("updAvailable", { v: appUpdate.version }) });
+    note.on("click", () => showWindow("settings"));
+    note.show();
+  }
+  return appUpdate;
+}
+const appUpdateState = () => ({ available: appUpdate, busy: appUpdateBusy, current: app.getVersion(), checked: settings.lastUpdateCheck || null });
+function checkAppUpdateDaily() {
+  if (Date.now() - (settings.lastUpdateCheck || 0) > 24 * 3600 * 1000) checkAppUpdate().catch(() => {});
+}
+
+function run(cmd, args) {
+  return new Promise((resolve, reject) => {
+    require("child_process").execFile(cmd, args, { timeout: 120000 }, (err, stdout, stderr) =>
+      err ? reject(new Error((stderr || err.message).trim())) : resolve({ stdout, stderr }));
+  });
+}
+
+async function installAppUpdate() {
+  if (!appUpdate || appUpdateBusy) return false;
+  appUpdateBusy = true;
+  const progress = (phase, pct) => send("appupdate:progress", { phase, pct });
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "macatlas-update-"));
+  const dmg = path.join(tmp, "MacAtlas.dmg"), mnt = path.join(tmp, "mnt");
+  let mounted = false;
+  try {
+    progress("download", 0);
+    const res = await fetch(appUpdate.url, { headers: { "User-Agent": `MacAtlas/${app.getVersion()}` } });
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+    const total = Number(res.headers.get("content-length")) || appUpdate.size || 0;
+    const out = fs.createWriteStream(dmg);
+    let got = 0;
+    for await (const chunk of res.body) {
+      got += chunk.length;
+      if (!out.write(chunk)) await new Promise((r) => out.once("drain", r));
+      if (total) progress("download", Math.round((got / total) * 100));
+    }
+    await new Promise((resolve, reject) => out.end((err) => (err ? reject(err) : resolve())));
+
+    progress("verify");
+    await run("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mnt, dmg]);
+    mounted = true;
+    const fresh = path.join(mnt, "MacAtlas.app");
+    await run("/usr/bin/codesign", ["--verify", "--deep", "--strict", fresh]);
+    const { stderr } = await run("/usr/bin/codesign", ["-dv", "--verbose=2", fresh]);
+    if (!new RegExp(`^TeamIdentifier=${TEAM_ID}$`, "m").test(stderr)) throw new Error(tr("updWrongSigner"));
+    await run("/usr/sbin/spctl", ["--assess", "--type", "execute", fresh]);
+
+    // Replace in place only for a normal, writable install (not translocated or run from the DMG)
+    const target = path.resolve(app.getPath("exe"), "../../..");
+    const parent = path.dirname(target);
+    // The path goes into a shell script below, so only plain path characters are allowed
+    let writable = /^[\w\/ .-]+\.app$/.test(target) && !target.includes("AppTranslocation") && !target.startsWith("/Volumes/");
+    try { fs.accessSync(parent, fs.constants.W_OK); } catch { writable = false; }
+    if (!writable) {
+      // Fall back to the DMG in Downloads so the user can drag the app over
+      await run("/usr/bin/hdiutil", ["detach", mnt, "-quiet"]); mounted = false;
+      const dest = path.join(app.getPath("downloads"), `MacAtlas-${appUpdate.version}.dmg`);
+      fs.copyFileSync(dmg, dest);
+      shell.openPath(dest);
+      appUpdateBusy = false;
+      send("appupdate:state", appUpdateState());
+      return "manual";
+    }
+    progress("install");
+    const staged = path.join(parent, `.MacAtlas-update-${process.pid}.app`);
+    fs.rmSync(staged, { recursive: true, force: true });
+    await run("/usr/bin/ditto", [fresh, staged]);
+    await run("/usr/bin/hdiutil", ["detach", mnt, "-quiet"]); mounted = false;
+    // Swap the bundles once this process has exited, then start the new version
+    const script = path.join(tmp, "swap.sh");
+    fs.writeFileSync(script, [
+      "#!/bin/bash",
+      `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.3; done`,
+      `old="${target}.old-$$"`,
+      `mv "${target}" "$old" && mv "${staged}" "${target}" && rm -rf "$old" || { [ -d "$old" ] && [ ! -d "${target}" ] && mv "$old" "${target}"; }`,
+      `open "${target}"`,
+      `rm -rf "${tmp}"`,
+    ].join("\n"));
+    spawn("/bin/bash", [script], { detached: true, stdio: "ignore" }).unref();
+    setTimeout(() => app.quit(), 300);
+    return true;
+  } catch (e) {
+    if (mounted) await run("/usr/bin/hdiutil", ["detach", mnt, "-force", "-quiet"]).catch(() => {});
+    fs.rmSync(tmp, { recursive: true, force: true });
+    appUpdateBusy = false;
+    send("appupdate:state", appUpdateState());
+    dialog.showErrorBox(tr("updFailed"), e.message);
+    return false;
+  }
+}
+ipcMain.handle("appupdate:state", () => appUpdateState());
+ipcMain.handle("appupdate:check", async () => {
+  try { await checkAppUpdate(true); return appUpdateState(); }
+  catch (e) { return { ...appUpdateState(), error: e.message }; }
+});
+ipcMain.handle("appupdate:install", () => installAppUpdate());
+
 app.whenReady().then(() => {
   if (!gotLock) return;
   nativeTheme.themeSource = settings.theme;
@@ -1057,8 +1216,8 @@ app.whenReady().then(() => {
   createWindow();
   setTrayVisible(settings.showTray);
   // First check shortly after launch, then every 30 minutes
-  setTimeout(() => { checkAutoScan(); checkRenewals(); }, 60 * 1000);
-  setInterval(() => { checkAutoScan(); checkRenewals(); }, 30 * 60 * 1000);
+  setTimeout(() => { checkAutoScan(); checkRenewals(); checkAppUpdateDaily(); }, 60 * 1000);
+  setInterval(() => { checkAutoScan(); checkRenewals(); checkAppUpdateDaily(); }, 30 * 60 * 1000);
   for (const u of pendingUrls.splice(0)) handleUrl(u);
   app.on("activate", () => showWindow());
 });

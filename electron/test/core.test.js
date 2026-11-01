@@ -143,3 +143,23 @@ test("SAFE_TOKEN rejects shell metacharacters", () => {
   for (const ok of ["git", "node@22", "someone/tap/tool", "esbenp.prettier-vscode", "c++"]) assert.ok(core.SAFE_TOKEN.test(ok), ok);
   for (const bad of ["a;b", "a b", "$(x)", "`x`", "a|b", "a&b", "a>b", ""]) assert.ok(!core.SAFE_TOKEN.test(bad), bad);
 });
+
+test("compareVersions orders release tags numerically", () => {
+  assert.equal(core.compareVersions("v1.3.0", "1.2.1"), 1);
+  assert.equal(core.compareVersions("1.2.10", "1.2.9"), 1);
+  assert.equal(core.compareVersions("1.2", "1.2.0"), 0);
+  assert.equal(core.compareVersions("1.2.1", "v1.10.0"), -1);
+});
+
+test("releaseInfo only accepts the DMG from this repository", () => {
+  const rel = (url, extra = {}) => ({ tag_name: "v1.3.0", html_url: "https://github.com/m4rcelnoel/MacAtlas/releases/tag/v1.3.0",
+    assets: [{ name: "MacAtlas.dmg", size: 5, browser_download_url: url }], ...extra });
+  const ok = "https://github.com/m4rcelnoel/MacAtlas/releases/download/v1.3.0/MacAtlas.dmg";
+  assert.deepEqual(core.releaseInfo(rel(ok)), { version: "1.3.0", url: ok, size: 5,
+    page: "https://github.com/m4rcelnoel/MacAtlas/releases/tag/v1.3.0", notes: "" });
+  assert.equal(core.releaseInfo(rel("https://evil.example/MacAtlas.dmg")), null);
+  assert.equal(core.releaseInfo(rel("https://github.com/someone/MacAtlas/releases/download/v1.3.0/MacAtlas.dmg")), null);
+  assert.equal(core.releaseInfo(rel(ok, { prerelease: true })), null);
+  assert.equal(core.releaseInfo(rel(ok, { draft: true })), null);
+  assert.equal(core.releaseInfo({ tag_name: "v1.3.0", assets: [] }), null);
+});

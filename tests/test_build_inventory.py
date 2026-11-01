@@ -84,6 +84,14 @@ def write_fixture(work, home):
         "ports.txt": "com.docker.backend|114|*:3000\nCode\\x20Helper|501|127.0.0.1:59776\nControlCenter|625|*:7000\n",
         "safari_ext.txt": "     com.bitwarden.desktop.safari(2026.10.0)\n\t    Display Name = Bitwarden\n\t     Parent Name = Bitwarden\n",
         "dotfiles.txt": ".zshrc|5636\n.ssh/config|1964\nLibrary/Application Support/Code/User/settings.json|201\n",
+        "cargo_install.txt": "ripgrep v14.1.1:\n    rg\nmytool v0.1.0 (/Users/demo/src/mytool):\n    mytool\n",
+        "go_bins.txt": "gopls|golang.org/x/tools/gopls|v0.20.0\nlocal|example.com/local|(devel)\n",
+        "pipx.txt": "black 25.1.0\n",
+        "uv_tools.txt": "ruff v0.12.0\n",
+        "composer.json": json.dumps({"installed": [{"name": "laravel/installer", "version": "v5.12.0"}]}),
+        "mise.json": json.dumps({"node": [{"version": "22.1.0", "installed": True}, {"version": "20.0.0", "installed": False}]}),
+        "asdf.txt": "nodejs|20.11.0\n",
+        "macports.txt": "  ripgrep @14.1.0_0 (active)\n  wget @1.25.0_1+ssl (active)\n",
     }
     for name, text in files.items():
         (data / name).write_text(text, encoding="utf-8")
@@ -136,6 +144,20 @@ class BuildInventoryTest(unittest.TestCase):
         self.assertTrue(code["last_used"].startswith("2026-10-30"))
         self.assertEqual(self.app("Old Tool")["install_desc"], "Websuche")
         self.assertIsNone(self.app("Royal TSX")["last_used"])
+
+    def test_extra_package_managers(self):
+        cmd = lambda cid: {i["name"]: i["install_cmd"] for i in self.cats[cid]["items"]}
+        # A crate installed from a local path has no reinstall command
+        self.assertEqual(cmd("cargo"), {"ripgrep": "cargo install ripgrep", "mytool": None})
+        self.assertEqual(cmd("go"), {"gopls": "go install golang.org/x/tools/gopls@latest", "local": None})
+        self.assertEqual(next(i for i in self.cats["go"]["items"] if i["name"] == "gopls")["version"], "0.20.0")
+        self.assertEqual(cmd("pipx"), {"black": "pipx install black"})
+        self.assertEqual(cmd("uv"), {"ruff": "uv tool install ruff"})
+        self.assertEqual(cmd("composer"), {"laravel/installer": "composer global require laravel/installer"})
+        self.assertEqual(cmd("mise"), {"node@22.1.0": "mise use -g node@22.1.0"})
+        self.assertEqual(cmd("asdf"), {"nodejs 20.11.0": "asdf install nodejs 20.11.0"})
+        self.assertEqual(cmd("macports"), {"ripgrep": "sudo port install ripgrep", "wget": "sudo port install wget"})
+        self.assertEqual({i["name"]: i["version"] for i in self.cats["macports"]["items"]}, {"ripgrep": "14.1.0", "wget": "1.25.0"})
 
     def test_formula_leaves(self):
         leaf = {f["name"]: f.get("leaf") for f in self.cats["brew_formulae"]["items"]}

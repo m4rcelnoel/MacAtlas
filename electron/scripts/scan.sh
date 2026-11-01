@@ -19,6 +19,12 @@ with_timeout() {
   return $rc
 }
 
+# Report a running count to the app ("+ key|n"); the progress page shows them live
+found() {  # key file [line pattern] [header lines to skip]
+  local n; n=$(grep -c "${3:-.}" "$2" 2>/dev/null) || true
+  n=$(( ${n:-0} - ${4:-0} )); echo "+ $1|$(( n < 0 ? 0 : n ))"
+}
+
 echo "→ System info"
 : > data/system.txt
 echo "hostname|$(scutil --get ComputerName 2>/dev/null || hostname -s)" >> data/system.txt
@@ -57,6 +63,7 @@ echo "→ Applications"
 ls -1 /Applications/ 2>/dev/null | grep -i '\.app$' | sed 's/\.app$//' > data/applications.txt
 ls -1 ~/Applications/ 2>/dev/null | grep -i '\.app$' | sed 's/\.app$//' > data/user_applications.txt
 ls -1 /System/Applications/ 2>/dev/null | grep -i '\.app$' | sed 's/\.app$//' > data/system_applications.txt
+found apps data/applications.txt
 
 echo "→ Homebrew"
 if command -v brew >/dev/null 2>&1; then
@@ -64,6 +71,8 @@ if command -v brew >/dev/null 2>&1; then
   brew list --versions --cask > data/brew_casks_versions.txt 2>/dev/null || true
   brew info --json=v2 --installed > data/brew_info.json 2>/dev/null || true
   brew leaves --installed-on-request > data/brew_leaves.txt 2>/dev/null || true
+  found brew_formulae data/brew_formulae_versions.txt
+  found brew_casks data/brew_casks_versions.txt
   # Refresh full cask catalog weekly (18 MB) so apps installed outside brew can still be matched
   if [ ! -f data/all_casks.json ] || [ $(find data/all_casks.json -mtime +7 | wc -l) -gt 0 ]; then
     curl -sL -o data/all_casks.json https://formulae.brew.sh/api/cask.json || true
@@ -73,25 +82,58 @@ fi
 echo "→ Binaries (brew bin / usr local)"
 ls -1 /opt/homebrew/bin/ 2>/dev/null > data/brew_binaries.txt || true
 ls -1 /usr/local/bin/ 2>/dev/null > data/usr_local_binaries.txt || true
+found brew_bin data/brew_binaries.txt
 
 echo "→ npm / pip / gem"
 npm list -g --depth=0 2>/dev/null | tail -n +2 | grep -v '^$' > data/npm_global.txt || true
 pip3 list 2>/dev/null > data/pip_packages.txt || true
+found pip data/pip_packages.txt . 2
 gem list --local 2>/dev/null > data/ruby_gems.txt || true
+found npm data/npm_global.txt
+found gem data/ruby_gems.txt
+
+echo "→ More package managers"
+# Each tool is optional; missing ones leave an empty file
+cargo install --list 2>/dev/null > data/cargo_install.txt || : > data/cargo_install.txt
+: > data/go_bins.txt
+if command -v go >/dev/null 2>&1; then
+  gobin="$(go env GOBIN 2>/dev/null)"; [ -n "$gobin" ] || gobin="$(go env GOPATH 2>/dev/null)/bin"
+  for f in "$gobin"/*; do
+    [ -f "$f" ] || continue
+    # "name|package path|module version" from the build info embedded in the binary
+    go version -m "$f" 2>/dev/null | awk -v n="$(basename "$f")" -F'\t' '$2=="path"{p=$3} $2=="mod"{v=$4} END{if(p!="") print n"|"p"|"v}' >> data/go_bins.txt || true
+  done
+fi
+pipx list --short 2>/dev/null > data/pipx.txt || : > data/pipx.txt
+uv tool list 2>/dev/null | grep -v '^-' > data/uv_tools.txt || : > data/uv_tools.txt
+with_timeout 30 composer global show --format=json 2>/dev/null > data/composer.json || : > data/composer.json
+mise ls --json 2>/dev/null > data/mise.json || : > data/mise.json
+: > data/asdf.txt
+for d in "${ASDF_DATA_DIR:-$HOME/.asdf}/installs/"*/*; do
+  [ -d "$d" ] && echo "$(basename "$(dirname "$d")")|$(basename "$d")" >> data/asdf.txt
+done
+port -q installed requested 2>/dev/null > data/macports.txt || : > data/macports.txt
+found cargo data/cargo_install.txt '^[^ ]'
+found go data/go_bins.txt
+found pipx data/pipx.txt
 
 echo "→ Editors"
 code --list-extensions 2>/dev/null > data/vscode_extensions.txt || true
 cursor --list-extensions 2>/dev/null > data/cursor_extensions.txt || true
+found vscode data/vscode_extensions.txt
 
 echo "→ Mac App Store"
 mas list 2>/dev/null > data/mas_apps.txt || true
+found mas data/mas_apps.txt
 
 echo "→ Docker"
 docker images --format "{{.Repository}}:{{.Tag}}|{{.Size}}" 2>/dev/null > data/docker_images.txt || true
 docker ps -a --format "{{.Names}}|{{.Image}}|{{.Status}}" 2>/dev/null > data/docker_containers.txt || true
+found docker_images data/docker_images.txt
 
 echo "→ Fonts"
 find ~/Library/Fonts /Library/Fonts /System/Library/Fonts -maxdepth 3 \( -name "*.ttf" -o -name "*.otf" -o -name "*.ttc" \) 2>/dev/null | while read f; do basename "$f"; done | sort -u > data/fonts.txt || true
+found fonts data/fonts.txt
 
 echo "→ Claude Code"
 ls -1 ~/.claude/skills/ 2>/dev/null > data/claude_skills.txt || true

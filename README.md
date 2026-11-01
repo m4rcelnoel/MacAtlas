@@ -28,8 +28,9 @@ Setting up a new Mac, cleaning up an old one or just answering *"what did I inst
 ## Features
 
 ### Inventory
-- Apps in `/Applications` (with Homebrew cask / App Store source detection), Mac App Store, Homebrew formulae & casks, npm, pip, Ruby gems, VS Code extensions, Docker images & containers, fonts, Claude Code plugins, skills and MCP servers.
-- An install command and website for every entry, full-text search (⌘F) across everything including your notes.
+- Apps in `/Applications` (with Homebrew cask / App Store source detection), Mac App Store, Homebrew formulae & casks, npm, pip, Ruby gems, Rust (`cargo install`), Go tools, pipx, uv tools, Composer, mise, asdf, MacPorts, VS Code extensions, Docker images & containers, fonts, Claude Code plugins, skills and MCP servers.
+- An install command and website for every entry, full-text search (⌘F) across everything including your notes, and **Quick Open (⌘K)** to jump to any page, entry or action.
+- Keyboard friendly: ↑/↓ moves through lists and the sidebar, the detail panel follows; sidebar sections can be collapsed.
 - Every list can be filtered (with update, Homebrew, App Store, no package source, with note, Intel only, unused) and sorted by name, size, last use or source. Click an entry for a detail panel with its update, install/update/uninstall commands, note and all known facts.
 - Hardware: model, chip, cores, memory, storage, battery health, displays, uptime.
 
@@ -55,7 +56,7 @@ Setting up a new Mac, cleaning up an old one or just answering *"what did I inst
 </p>
 
 ### Moving to a new Mac
-- **Export / import** a scan (JSON) and **compare** two Macs: what's missing here, as an install script or a `Brewfile`. Untick anything you don't want; the migration assistant uses the same selection.
+- **Export / import** a scan (JSON – or just drop the file onto the window) and **compare** two Macs: what's missing here, as an install script or a `Brewfile`. Untick anything you don't want; the migration assistant uses the same selection.
 - **Migration assistant** – step by step: Homebrew, Homebrew apps, App Store, developer packages, VS Code, manual downloads. *Check this Mac again* ticks off what's done.
 - **Take settings along** – a ZIP with your shell, Git, SSH config (never keys), VS Code/Cursor settings and Dock/Finder/screenshot/trackpad preferences, plus a restore script. Values that look like passwords or tokens are replaced automatically.
 - **My Macs** – optionally share every scan through an iCloud Drive folder and see all your Macs side by side.
@@ -81,7 +82,7 @@ open "macatlas://scan"
 
 <img src="docs/images/settings.png" width="100%" alt="Settings">
 
-**Settings** (⌘,): language (System/German/English), appearance (Auto/Light/Dark), open at login, menu bar, scheduled scans, notifications, sharing with other Macs, history length, reset.
+**Settings** (⌘,): language (System/German/English), appearance (Auto/Light/Dark), open at login, menu bar, scheduled scans, notifications (with a test button), sharing with other Macs, history length, MacAtlas updates, reset.
 
 ## Install
 
@@ -97,13 +98,13 @@ open "macatlas://scan"
 - Xcode Command Line Tools for `python3` – if they're missing, macOS offers to install them on the first scan (or run `xcode-select --install`)
 - Optional: Homebrew, `mas`, npm, pip, Docker, VS Code … – whatever is installed gets scanned, everything else is skipped
 
-**Updating** – download the new DMG and replace the app in *Applications*. Scans, history, notes and settings are kept.
+**Updating** – MacAtlas checks GitHub once a day and offers *Update Now* in Settings: it downloads the new DMG, verifies that it is notarized and signed by the same developer, replaces the app and restarts. You can also download the DMG yourself and replace the app. Scans, history, notes and settings are kept.
 
 **Uninstalling** – quit MacAtlas, move it to the Trash and delete `~/Library/Application Support/MacAtlas` to remove its data. If you turned on sharing, also delete the `MacAtlas` folder in iCloud Drive.
 
 ## Privacy
 
-Everything stays on your Mac – there is no server, account or telemetry. Network access happens only through the package managers' own update checks (`brew update`/`brew outdated`, `mas outdated`, `npm outdated`, `pip list --outdated`, `gem outdated`) and a weekly download of the public Homebrew cask catalog. Data protected by macOS privacy controls (e.g. other apps' data such as Chrome extensions) is shown as *no access* instead of asking for permission. Sharing with other Macs is off by default; when turned on, scans are written to a folder you choose (iCloud Drive by default).
+Everything stays on your Mac – there is no server, account or telemetry. Network access happens only through the package managers' own update checks (`brew update`/`brew outdated`, `mas outdated`, `npm outdated`, `pip list --outdated`, `gem outdated`) a weekly download of the public Homebrew cask catalog and a daily check of this repository's latest release (can be turned off in Settings). Data protected by macOS privacy controls (e.g. other apps' data such as Chrome extensions) is shown as *no access* instead of asking for permission. Sharing with other Macs is off by default; when turned on, scans are written to a folder you choose (iCloud Drive by default).
 
 ## Development
 
@@ -113,6 +114,7 @@ cd MacAtlas/electron
 npm ci
 npm start          # run from source
 npm test           # unit & static tests (Node's built-in test runner)
+npm run test:ui    # UI tests: starts the app with sample data and drives it with Playwright (macOS)
 cd .. && python3 -m unittest discover -s tests   # scanner tests
 ./build.sh         # package, sign ad hoc, install to /Applications, build the DMG
 ./build.sh --no-install
@@ -140,7 +142,7 @@ scan.sh  ──raw text/JSON──▶  build_inventory.py  ──inventory.json�
 | `electron/lib/core.js` | Pure, unit-tested helpers (Brewfile, CSV, secret redaction, history, renewals) |
 | `electron/preload.js` | Minimal IPC bridge for the sandboxed renderer |
 | `electron/renderer/` | UI (`index.html`, `app.js`) and English translations (`i18n.js`, keys are the German source strings) |
-| `electron/test/`, `tests/` | JavaScript and Python tests |
+| `electron/test/`, `electron/test-ui/`, `tests/` | JavaScript, UI (Playwright) and Python tests |
 | `build.sh`, `make_icon.py` | Build/sign/DMG script and icon generator |
 
 App data lives in `~/Library/Application Support/MacAtlas/` (`scan/`, `history/`, `snapshots/`, `notes.json`, `settings.json`).
@@ -152,7 +154,7 @@ App data lives in `~/Library/Application Support/MacAtlas/` (`scan/`, `history/`
 
 ### CI/CD
 
-GitHub Actions runs on every push and pull request: JavaScript tests and lint, ShellCheck, Python tests on the macOS system Python and on Python 3.12, and an ad-hoc signed DMG build on an Apple Silicon runner (uploaded as an artifact). Pushing a tag like `v1.2.0` publishes a GitHub Release with the DMG attached.
+GitHub Actions runs on every push and pull request: JavaScript tests and lint, ShellCheck, Python tests on the macOS system Python and on Python 3.12, UI tests and a DMG build on an Apple Silicon runner (uploaded as an artifact). Pushing a tag like `v1.2.0` publishes a GitHub Release with the DMG attached and – when the `HOMEBREW_TAP_TOKEN` secret is set – updates the cask in [`m4rcelnoel/homebrew-tap`](https://github.com/m4rcelnoel/homebrew-tap).
 
 ### Signing & notarization (optional)
 

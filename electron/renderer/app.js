@@ -3,7 +3,7 @@ if (!window.inventory) {
   document.body.classList.add("browser");
   const noop = () => {};
   const devSettings = () => { try { return JSON.parse(localStorage.getItem("mi-dev-settings") || "{}"); } catch { return {}; } };
-  const DEV_DEFAULTS = { language: "system", theme: "system", autoScan: "off", showTray: true, trayCount: true, notify: true, brewUpdate: true, embedIcons: true, historyMax: 100, openAtLogin: false };
+  const DEV_DEFAULTS = { language: "system", theme: "system", autoScan: "off", showTray: true, trayCount: true, notify: true, brewUpdate: true, embedIcons: true, historyMax: 100, openAtLogin: false, updateCheck: true };
   const pub = () => {
     const s = { ...DEV_DEFAULTS, ...devSettings() };
     return { ...s, resolvedLanguage: s.language === "system" ? (navigator.language.startsWith("de") ? "de" : "en") : s.language, version: "dev", electron: "–", historyCount: 0, notesCount: 0, dataDir: "~/Library/Application Support/MacAtlas" };
@@ -34,10 +34,12 @@ if (!window.inventory) {
     savePdfAuto: noop, onReportAuto: noop,
     onNav: noop, onReportRequest: noop,
     history: async () => { try { return await (await fetch("../../history-test.json")).json(); } catch { return []; } },
-    rescan: noop, export: noop, import: noop, switchToOwn: noop, reveal: noop,
+    rescan: noop, export: noop, import: noop, importFile: noop, switchToOwn: noop, reveal: noop,
     openUrl: (u) => window.open(u, "_blank"), accent: async () => null,
     onAccent: noop, onFocus: noop, onScanStarted: noop, onScanProgress: noop,
     onScanDone: noop, onInventoryChanged: noop, onToast: noop,
+    appUpdate: async () => ({ available: null, current: "dev", checked: null }), checkAppUpdate: async () => ({ available: null, current: "dev", checked: Date.now() }),
+    testNotification: async () => true, installAppUpdate: async () => false, onAppUpdate: noop, onAppUpdateProgress: noop,
   };
 }
 
@@ -70,6 +72,7 @@ function applyStatic() {
   $("importBtn").title = t("Snapshot importieren (⌘I)");
   $("exportBtn").title = t("Exportieren (⌘E)");
   $("snapBack").textContent = t("Eigener Mac");
+  $("dropText").textContent = t("Snapshot öffnen");
   $("gearBtn").title = t("Einstellungen (⌘,)");
 }
 
@@ -138,6 +141,7 @@ const P = {
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.5h.01"/>',
   photo: '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20.5 15.5l-5-5-9 8.5"/>',
 };
+Object.assign(P, { cargo: P.brew_casks, go: P.pip, pipx: P.pip, uv: P.npm, composer: P.brewfile, mise: P.history, asdf: P.history, macports: P.docker_images });
 const svg = (k, cls = "i") => `<svg class="${cls}" viewBox="0 0 24 24">${P[k] || P.dot}</svg>`;
 
 const COLORS = {
@@ -151,13 +155,14 @@ const COLORS = {
   notes: "#ffcc00", pdf: "#ff453a", note: "#ff9f0a",
   security: "#34c759", autostart: "#ff375f", macos: "#636366", gear: "#8e8e93", warn: "#ff9f0a", brewfile: "#ff9f0a",
   settings: "#8e8e93", globe: "#0a84ff", appearance: "#1c1c1e", power: "#34c759", menubar: "#5e5ce6", bell: "#ff3b30",
-  folder: "#0a84ff", info: "#8e8e93", photo: "#ff9f0a",
+  folder: "#0a84ff", info: "#8e8e93", photo: "#ff9f0a", scan: "#34c759", import: "#ff9f0a",
+  cargo: "#b7410e", go: "#00add8", pipx: "#3776ab", uv: "#de5fe9", composer: "#885630", mise: "#6e56cf", asdf: "#a1a1aa", macports: "#4b6cb7",
 };
 const tileBg = (k) => { const c = COLORS[k] || "#8e8e93"; return `background:linear-gradient(180deg, color-mix(in srgb, ${c} 82%, white), ${c})`; };
 
 const SECTIONS = [
   ["Programme", ["apps", "mas", "brew_casks", "user_apps", "system_apps"]],
-  ["Entwicklung", ["brew_formulae", "npm", "pip", "gem", "vscode", "docker_images", "docker_containers"]],
+  ["Entwicklung", ["brew_formulae", "npm", "pip", "gem", "cargo", "go", "pipx", "uv", "composer", "mise", "asdf", "macports", "vscode", "docker_images", "docker_containers"]],
   ["Claude", ["claude_mcp", "claude_plugins", "claude_skills"]],
   ["System", ["fonts", "brew_bin", "usr_local_bin"]],
 ];
@@ -167,6 +172,7 @@ const SHORT_LABELS = {
   claude_plugins: "Plugins", claude_skills: "Skills", docker_images: "Docker Images", docker_containers: "Docker Container",
   fonts: "Schriftarten", system_apps: "System-Apps", user_apps: "Benutzer-Apps",
   brew_bin: "Homebrew bin", usr_local_bin: "/usr/local/bin",
+  cargo: "Rust (cargo)", go: "Go-Tools", pipx: "pipx", uv: "uv-Tools", composer: "Composer", mise: "mise", asdf: "asdf", macports: "MacPorts",
 };
 const DESC = {
   apps: "Programme in /Applications – mit Homebrew-, App-Store- oder Download-Quelle",
@@ -187,10 +193,18 @@ const DESC = {
   user_apps: "Programme in ~/Applications",
   brew_bin: "Alle Befehle in /opt/homebrew/bin",
   usr_local_bin: "Alle Befehle in /usr/local/bin",
+  cargo: "Mit cargo install installierte Rust-Programme",
+  go: "Mit go install installierte Programme in $GOPATH/bin",
+  pipx: "Python-Programme in eigenen Umgebungen (pipx)",
+  uv: "Mit uv tool install installierte Python-Programme",
+  composer: "Global installierte PHP-Pakete (Composer)",
+  mise: "Laufzeitumgebungen und Tools, verwaltet mit mise",
+  asdf: "Laufzeitumgebungen, verwaltet mit asdf",
+  macports: "Von dir angeforderte MacPorts-Pakete",
 };
 const STEP = {
   "System info": "Systeminformationen", "Applications": "Programme", "Homebrew": "Homebrew",
-  "Binaries (brew bin / usr local)": "Befehlszeilen-Tools", "npm / pip / gem": "Paketmanager",
+  "Binaries (brew bin / usr local)": "Befehlszeilen-Tools", "npm / pip / gem": "Paketmanager", "More package managers": "Weitere Paketmanager",
   "Editors": "Editor-Erweiterungen", "Mac App Store": "Mac App Store", "Docker": "Docker",
   "Fonts": "Schriften", "Claude Code": "Claude Code", "Updates": "Nach Updates suchen",
   "Security + autostart": "Sicherheit & Autostart", "Storage": "Speicherplatz", "Versions": "Versionen",
@@ -302,16 +316,56 @@ const ownMode = () => state.source === "own" && !!state.data;
 // ── Sidebar ────────────────────────────────────────────────────────
 function navItem(id, text, count, iconKey) {
   const sel = !state.q && state.sel === id ? " sel" : "";
-  return `<button class="nav-item${sel}" data-nav="${id}">
+  return `<button class="nav-item${sel}" data-nav="${id}"${sel ? ' aria-current="page"' : ""}>
     <span class="tile" style="${tileBg(iconKey || id)}">${svg(iconKey || id)}</span>
     <span class="lbl">${esc(text)}</span>${count != null ? `<span class="cnt">${nf.format(count)}</span>` : ""}
   </button>`;
+}
+// Pages that only exist for this Mac's own scan: [section, [[id, label, count, iconKey], …]]
+function ownPages() {
+  const cl = cleanupData();
+  return [
+    ["Wartung", [
+      ["updates", t("Updates"), state.data.updates ? state.data.updates.items.length : null, "updates"],
+      ["cleanup", t("Aufräumen"), cl ? cl.flagged : null, "cleanup"],
+      ["storage", t("Speicherplatz"), null, "size"],
+      ["versions", t("Versionen"), versionsFlagged() || null, "history"],
+      ["security", t("Sicherheit"), state.data.security ? state.data.security.checks.filter((c) => !c.ok).length || null : null, "security"],
+      ["autostart", t("Autostart"), state.data.autostart ? state.data.autostart.length : null, "autostart"],
+      ["history", t("Verlauf"), state.history?.length || null, "history"],
+    ]],
+    ["Persönlich", [
+      ["notes", t("Notizen"), Object.keys(state.notes || {}).length || null, "notes"],
+      ["licenses", t("Abos & Lizenzen"), licenseEntries().length || null, "pdf"],
+      ["dotfiles", t("Einstellungen mitnehmen"), null, "settings"],
+      ["macs", t("Meine Macs"), state.settings?.syncEnabled ? (state.macs?.macs.length || null) : null, "macos"],
+    ]],
+  ];
+}
+// Collapsed sidebar sections (by German title), remembered across launches
+function navCollapsed() {
+  try { return new Set(JSON.parse(store.get("mi-nav-collapsed", "[]"))); } catch { return new Set(); }
+}
+function toggleNavSec(title) {
+  const c = navCollapsed();
+  c.has(title) ? c.delete(title) : c.add(title);
+  store.set("mi-nav-collapsed", JSON.stringify([...c]));
+  renderNav();
+}
+// items: [[id, label, count, iconKey], …]. A collapsed section still shows the selected page.
+function navSection(title, items, collapsed) {
+  if (!items.length) return "";
+  const shut = collapsed.has(title);
+  const visible = shut ? items.filter(([id]) => !state.q && state.sel === id) : items;
+  return `<button class="nav-sec${shut ? " shut" : ""}" data-navsec="${esc(title)}" aria-expanded="${!shut}">${t(title)}<svg class="i chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`
+    + visible.map((a) => navItem(...a)).join("");
 }
 function renderNav() {
   const nav = $("nav");
   $("gearBtn").classList.toggle("sel", state.sel === "settings" && !state.q);
   if (!state.data) { nav.innerHTML = ""; $("sbFoot").innerHTML = ""; return; }
   const known = new Set(SECTIONS.flatMap((s) => s[1]));
+  const collapsed = navCollapsed();
   let html = navItem("overview", t("Übersicht"), null, "overview");
   if (state.source === "snapshot") {
     const cmp = compareData();
@@ -320,28 +374,11 @@ function renderNav() {
     html += navItem("migrate", t("Umzug"), ms ? ms.filter((x) => x.open).length || null : null, "import");
     if (Object.keys(state.notes || {}).length) html += navItem("notes", t("Notizen"), Object.keys(state.notes).length, "notes");
   } else {
-    const cl = cleanupData();
-    html += `<div class="nav-sec">${t("Wartung")}</div>`
-      + navItem("updates", t("Updates"), state.data.updates ? state.data.updates.items.length : null, "updates")
-      + navItem("cleanup", t("Aufräumen"), cl ? cl.flagged : null, "cleanup")
-      + navItem("storage", t("Speicherplatz"), null, "size")
-      + navItem("versions", t("Versionen"), versionsFlagged() || null, "history")
-      + navItem("security", t("Sicherheit"), state.data.security ? state.data.security.checks.filter((c) => !c.ok).length || null : null, "security")
-      + navItem("autostart", t("Autostart"), state.data.autostart ? state.data.autostart.length : null, "autostart")
-      + navItem("history", t("Verlauf"), state.history?.length || null, "history");
-    html += `<div class="nav-sec">${t("Persönlich")}</div>`
-      + navItem("notes", t("Notizen"), Object.keys(state.notes || {}).length || null, "notes")
-      + navItem("licenses", t("Abos & Lizenzen"), licenseEntries().length || null, "pdf")
-      + navItem("dotfiles", t("Einstellungen mitnehmen"), null, "settings")
-      + navItem("macs", t("Meine Macs"), state.settings?.syncEnabled ? (state.macs?.macs.length || null) : null, "macos");
+    for (const [title, items] of ownPages()) html += navSection(title, items, collapsed);
   }
-  for (const [title, ids] of SECTIONS) {
-    const items = ids.map(catById).filter((c) => c && c.count);
-    if (!items.length) continue;
-    html += `<div class="nav-sec">${t(title)}</div>` + items.map((c) => navItem(c.id, label(c), c.count)).join("");
-  }
-  const rest = cats().filter((c) => !known.has(c.id) && c.count);
-  if (rest.length) html += `<div class="nav-sec">${t("Weitere")}</div>` + rest.map((c) => navItem(c.id, label(c), c.count)).join("");
+  const catItems = (list) => list.map((c) => [c.id, label(c), c.count]);
+  for (const [title, ids] of SECTIONS) html += navSection(title, catItems(ids.map(catById).filter((c) => c && c.count)), collapsed);
+  html += navSection("Weitere", catItems(cats().filter((c) => !known.has(c.id) && c.count)), collapsed);
   nav.innerHTML = html;
   const s = state.data.system || {};
   $("sbFoot").innerHTML = state.source === "snapshot"
@@ -357,10 +394,10 @@ function iconHtml(it, cat, big) {
 function actionsHtml(it, cat) {
   let a = "";
   const unsafe = state.source === "snapshot" && it.install_cmd && !/^[A-Za-z0-9@._\/+: -]+$/.test(it.install_cmd);
-  if (it.install_cmd && !unsafe) a += `<button class="act" data-copy="${esc(it.install_cmd)}" title="${t("Befehl kopieren")}">${svg("copy")}</button>`;
-  if (it.install_url) a += `<button class="act" data-url="${esc(it.install_url)}" title="${esc(installDesc(it.install_desc) || t("Website öffnen"))}">${svg("link")}</button>`;
-  if (cat.id === "apps" && state.source === "own") a += `<button class="act" data-reveal="${esc(it.name)}" title="${t("Im Finder zeigen")}">${svg("finder")}</button>`;
-  if (state.source === "own") a += `<button class="act${noteOf(cat, it) ? " has-note" : ""}" data-note="${esc(noteKey(cat, it))}" title="${t("Notiz & Tags")}">${svg("note")}</button>`;
+  if (it.install_cmd && !unsafe) a += `<button class="act" data-copy="${esc(it.install_cmd)}" title="${t("Befehl kopieren")}" aria-label="${t("Befehl kopieren")}">${svg("copy")}</button>`;
+  if (it.install_url) a += `<button class="act" data-url="${esc(it.install_url)}" title="${esc(installDesc(it.install_desc) || t("Website öffnen"))}" aria-label="${esc(installDesc(it.install_desc) || t("Website öffnen"))}">${svg("link")}</button>`;
+  if (cat.id === "apps" && state.source === "own") a += `<button class="act" data-reveal="${esc(it.name)}" title="${t("Im Finder zeigen")}" aria-label="${t("Im Finder zeigen")}">${svg("finder")}</button>`;
+  if (state.source === "own") a += `<button class="act${noteOf(cat, it) ? " has-note" : ""}" data-note="${esc(noteKey(cat, it))}" title="${t("Notiz & Tags")}" aria-label="${t("Notiz & Tags")}">${svg("note")}</button>`;
   return a ? `<div class="ractions">${a}</div>` : "";
 }
 function subline(it, cat) {
@@ -479,7 +516,7 @@ function inspectorHtml(cat, it) {
     : own && cat.id === "brew_formulae" && SAFE.test(it.name) ? `brew uninstall ${it.name}`
     : own && cat.id === "brew_casks" && SAFE.test(it.name) ? `brew uninstall --cask ${it.name}` : "";
   const cmdRow = (title, cmd) => `<div class="insp-cmd"><span>${title}</span><div><code>${esc(cmd)}</code>
-    <button class="act" data-copy="${esc(cmd)}" title="${t("Befehl kopieren")}">${svg("copy")}</button></div></div>`;
+    <button class="act" data-copy="${esc(cmd)}" title="${t("Befehl kopieren")}" aria-label="${t("Befehl kopieren")}">${svg("copy")}</button></div></div>`;
   const facts = [
     [t("Version"), it.version],
     [t("Kategorie"), label(cat)],
@@ -497,7 +534,7 @@ function inspectorHtml(cat, it) {
   return `<div class="insp-head">
       ${it.icon ? `<img src="${esc(it.icon)}" alt="">` : `<div class="ricon glyph" style="${tileBg(cat.id)}">${svg(cat.id)}</div>`}
       <div><b>${esc(it.name)}</b><span>${esc(label(cat))}${it.version ? " · " + esc(it.version) : ""}</span></div>
-      <button class="act insp-close" data-do="closeinspector" title="${t("Schließen")}">✕</button>
+      <button class="act insp-close" data-do="closeinspector" title="${t("Schließen")}" aria-label="${t("Schließen")}">✕</button>
     </div>
     ${upd ? `<div class="insp-update">${svg("updates")}<div><b>${t("Update verfügbar")}</b>
       <span>${esc(upd.current || "?")} → ${esc(upd.latest)}${upd.auto ? " · " + t("aktualisiert sich selbst") : ""}</span></div></div>` : ""}
@@ -603,16 +640,33 @@ const oldScan = (title) => `<div class="noresults"><b>${title}</b>${t("Dieser Sc
   <button class="btn primary" data-do="scan">${svg("scan")} ${t("Neu scannen")}</button></div>`;
 
 // ── Pages ──────────────────────────────────────────────────────────
+// First launch: three steps instead of an empty window
 function pageEmpty() {
-  return `<div class="center"><div class="empty">
+  const steps = [
+    ["scan", "Mac scannen", "Erfasst Programme, Pakete, Hardware und Updates – in 30–60 Sekunden, ohne Administratorrechte."],
+    ["updates", "Aktualisieren und aufräumen", "Updates, Speicherplatz und Sicherheit auf einen Blick. MacAtlas löscht nie selbst etwas."],
+    ["import", "Auf einen neuen Mac umziehen", "Scan exportieren (⌘E) und auf dem neuen Mac öffnen – oder die Datei einfach aufs Fenster ziehen."],
+  ];
+  const clt = state.settings && state.settings.commandLineTools === false
+    ? `<div class="intro-warn">${svg("warn")}<div><b>${t("Command Line Tools fehlen")}</b>${t("Der Scan braucht Python aus den Command Line Tools von Apple (kostenlos, ca. 1 GB).")}</div>
+        <button class="btn" data-do="installclt">${t("Installieren …")}</button></div>` : "";
+  return `<div class="center"><div class="empty intro">
     <div class="glyph">${svg("overview")}</div>
     <h2>${t("Willkommen bei MacAtlas")}</h2>
-    <p>${t("Erfasse alle Programme, Homebrew-Pakete, Entwickler-Tools, Schriften und die Hardware dieses Macs — mit Installationsbefehl für jedes Programm. Oder öffne einen Snapshot von einem anderen Mac.")}</p>
+    <p>${t("Alles, was auf deinem Mac installiert ist – mit Installationsbefehl für jedes Programm.")}</p>
+    ${clt}
+    <ol class="intro-steps">${steps.map(([icon, title, text], i) => `<li><span class="tile" style="${tileBg(icon)}">${svg(icon)}</span>
+      <div><b>${i + 1}. ${t(title)}</b><span>${t(text)}</span></div></li>`).join("")}</ol>
     <div class="btns">
       <button class="btn primary" data-do="scan">${svg("scan")} ${t("Mac scannen")}</button>
       <button class="btn" data-do="import">${svg("import")} ${t("Snapshot öffnen …")}</button>
     </div>
   </div></div>`;
+}
+// Live tally while scanning: "64 Programme · 123 Homebrew · …"
+function scanCountsHtml(p) {
+  return Object.entries(p?.counts || {}).filter(([, n]) => n > 0)
+    .map(([k, n]) => `<span><b>${nf.format(n)}</b> ${esc(t(SHORT_LABELS[k] || k))}</span>`).join("");
 }
 function pageScanning(p) {
   const pct = p && p.total ? Math.round((p.step / p.total) * 100) : 4;
@@ -623,6 +677,7 @@ function pageScanning(p) {
     <p style="margin-bottom:0">${t("Das dauert je nach Anzahl der Programme 10–40 Sekunden.")}</p>
     <div class="progress"><span id="progBar" style="width:${pct}%"></span></div>
     <div class="step" id="progStep">${esc(step)}</div>
+    <div class="scan-counts" id="progCounts">${scanCountsHtml(p)}</div>
     <div class="btns" style="margin-top:18px"><button class="btn" data-do="cancelscan">${t("Abbrechen")}</button></div>
   </div></div>`;
 }
@@ -730,7 +785,19 @@ function pageSearch(q) {
 }
 
 // ── Compare snapshot ↔ this Mac ────────────────────────────────────
-const COMPARE_CATS = ["apps", "mas", "brew_casks", "brew_formulae", "npm", "pip", "gem", "vscode", "docker_images"];
+const EXTRA_CATS = ["cargo", "go", "pipx", "uv", "composer", "mise", "asdf", "macports"];
+const COMPARE_CATS = ["apps", "mas", "brew_casks", "brew_formulae", "npm", "pip", "gem", ...EXTRA_CATS, "vscode", "docker_images"];
+// Further package managers in the install script: [command pattern, section title, command prefix]
+const EXTRA_INSTALL = [
+  [/^cargo install (\S+)$/, "Rust (cargo)", "cargo install"],
+  [/^go install (\S+)$/, "Go-Tools", "go install"],
+  [/^pipx install (\S+)$/, "pipx", "pipx install"],
+  [/^uv tool install (\S+)$/, "uv-Tools", "uv tool install"],
+  [/^composer global require (\S+)$/, "Composer (global)", "composer global require"],
+  [/^mise use -g (\S+)$/, "mise", "mise use -g"],
+  [/^asdf install (\S+ \S+)$/, "asdf", "asdf install"],
+  [/^sudo port install (\S+)$/, "MacPorts", "sudo port install"],
+];
 const PIP_BASE = new Set(["pip", "setuptools", "wheel"]);
 const SAFE = /^[A-Za-z0-9@._\/+:-]+$/;   // imported files are untrusted: only plain package tokens go into the script
 
@@ -764,7 +831,7 @@ function compareData() {
 function buildScript(cmp, only) {
   const want = (k) => !only || only.has(k);
   const s = state.data.system || {}, me = state.own?.system || {};
-  const g = { formulae: new Set(), casks: new Set(), mas: new Map(), npm: new Set(), pip: new Set(), gem: new Set(), code: new Set(), docker: new Set() };
+  const g = { formulae: new Set(), casks: new Set(), mas: new Map(), npm: new Set(), pip: new Set(), gem: new Set(), code: new Set(), docker: new Set(), extra: [] };
   const manual = [];
   for (const { cat, missing } of cmp.res) {
     for (const it of missing) {
@@ -779,6 +846,7 @@ function buildScript(cmp, only) {
       else if ((m = c.match(/^gem install (\S+)$/))) g.gem.add(m[1]);
       else if ((m = c.match(/^code --install-extension (\S+)$/))) g.code.add(m[1]);
       else if ((m = c.match(/^docker pull (\S+)$/))) g.docker.add(m[1]);
+      else if ((m = EXTRA_INSTALL.findIndex(([re]) => re.test(c))) >= 0) (g.extra[m] ||= new Set()).add(c.match(EXTRA_INSTALL[m][0])[1]);
       else if (cat.id === "apps") manual.push(it);
     }
   }
@@ -819,6 +887,11 @@ fi
   if (want("dev")) out += block("npm (global)", "npm install -g", safe(g.npm));
   if (want("dev")) out += block("Python-Pakete", "pip3 install", safe(g.pip));
   if (want("dev")) out += block("Ruby Gems", "gem install", safe(g.gem));
+  if (want("dev")) EXTRA_INSTALL.forEach(([, title, prefix], i) => {
+    // asdf takes "tool version": check both tokens
+    const items = [...(g.extra[i] || [])].filter((x) => x.split(" ").every((p) => SAFE.test(p))).sort();
+    out += oneEach(title, prefix, items);
+  });
   if (want("code")) out += oneEach("VS-Code-Erweiterungen", "code --install-extension", safe(g.code));
   const docker = only ? [] : safe(g.docker);
   if (docker.length) out += `\n# ${t("Docker-Images: nur öffentliche Images lassen sich laden – bei Bedarf einkommentieren")}\n${docker.map((x) => `# docker pull ${x}`).join("\n")}\n`;
@@ -921,9 +994,9 @@ function updateRow(it, catId, pickable) {
     + (it.auto ? `<span class="pill blue">${t("aktualisiert sich selbst")}</span>` : "");
   const cmd = it.cmd ? `<div class="rcmd"><code>${esc(it.cmd)}</code></div>` : "";
   let a = "";
-  if (it.cmd && SAFE.test(it.cmd.split(" ").pop())) a += `<button class="act" data-copy="${esc(it.cmd)}" title="${t("Befehl kopieren")}">${svg("copy")}</button>`;
-  if (it.source === "macos") a += `<button class="act" data-settings="com.apple.Software-Update-Settings.extension" title="${t("Softwareupdate öffnen")}">${svg("gear")}</button>`;
-  else if (it.url) a += `<button class="act" data-url="${esc(it.url)}" title="${t("Website öffnen")}">${svg("link")}</button>`;
+  if (it.cmd && SAFE.test(it.cmd.split(" ").pop())) a += `<button class="act" data-copy="${esc(it.cmd)}" title="${t("Befehl kopieren")}" aria-label="${t("Befehl kopieren")}">${svg("copy")}</button>`;
+  if (it.source === "macos") a += `<button class="act" data-settings="com.apple.Software-Update-Settings.extension" title="${t("Softwareupdate öffnen")}" aria-label="${t("Softwareupdate öffnen")}">${svg("gear")}</button>`;
+  else if (it.url) a += `<button class="act" data-url="${esc(it.url)}" title="${t("Website öffnen")}" aria-label="${t("Website öffnen")}">${svg("link")}</button>`;
   const ver = it.current ? `${esc(it.current)}<span class="ver-arrow">→</span><span class="ver-new">${esc(it.latest)}</span>`
     : t("{v} verfügbar", { v: `<span class="ver-new">${t("Version {v}", { v: esc(it.latest) })}</span>` });
   return `<div class="row">
@@ -991,10 +1064,10 @@ function cleanupRow(a, max) {
   const cat = catById("apps");
   const sub = [a.version, max ? "" : fmtBytes(a.size_bytes), lastUsedText(a), ARCH[a.arch] ? t(ARCH[a.arch]) : ""].filter(Boolean).map(esc).join(" · ");
   const sig = a.signer === "adhoc" ? t("ad hoc signiert") : "signer" in a && !a.signer ? t("nicht signiert") : "";
-  let acts = `<button class="act" data-reveal="${esc(a.name)}" title="${t("Im Finder zeigen")}">${svg("finder")}</button>`;
+  let acts = `<button class="act" data-reveal="${esc(a.name)}" title="${t("Im Finder zeigen")}" aria-label="${t("Im Finder zeigen")}">${svg("finder")}</button>`;
   const un = a.brew_managed && a.cask && SAFE.test(a.cask) ? `brew uninstall --cask ${a.cask}` : "";
-  if (un) acts += `<button class="act" data-copy="${esc(un)}" title="${t("Deinstallationsbefehl kopieren")}">${svg("copy")}</button>`;
-  if (a.install_url) acts += `<button class="act" data-url="${esc(a.install_url)}" title="${t("Website öffnen")}">${svg("link")}</button>`;
+  if (un) acts += `<button class="act" data-copy="${esc(un)}" title="${t("Deinstallationsbefehl kopieren")}" aria-label="${t("Deinstallationsbefehl kopieren")}">${svg("copy")}</button>`;
+  if (a.install_url) acts += `<button class="act" data-url="${esc(a.install_url)}" title="${t("Website öffnen")}" aria-label="${t("Website öffnen")}">${svg("link")}</button>`;
   const bar = max ? `<div class="sizebar">${fmtBytes(a.size_bytes)}<div class="bar"><span style="width:${Math.max(2, Math.round((a.size_bytes / max) * 100))}%"></span></div></div>` : "";
   return `<div class="row" title="${esc(a.bundle_id || a.name)}">
     ${iconHtml(a, cat)}
@@ -1034,7 +1107,7 @@ function pageSecurity() {
     <div class="ricon glyph" style="${tileBg(c.ok ? "security" : "warn")}">${svg(c.ok ? "check" : "warn")}</div>
     <div class="rmain"><div class="rname">${esc(secLabel(c))}</div><div class="rsub" style="white-space:normal">${esc(secHint(c))}</div></div>
     <span class="pill ${c.ok ? "green" : "orange"}" style="margin:0">${esc(secValue(c.value))}</span>
-    ${c.settings ? `<div class="ractions" style="opacity:1"><button class="act" data-settings="${esc(c.settings)}" title="${t("In den Systemeinstellungen öffnen")}">${svg("gear")}</button></div>` : ""}
+    ${c.settings ? `<div class="ractions" style="opacity:1"><button class="act" data-settings="${esc(c.settings)}" title="${t("In den Systemeinstellungen öffnen")}" aria-label="${t("In den Systemeinstellungen öffnen")}">${svg("gear")}</button></div>` : ""}
   </div>`).join("");
   const pend = sec.pending_updates || [];
   const all = ok === sec.checks.length;
@@ -1069,8 +1142,8 @@ function pageAutostart() {
       + (it.keep_alive ? `<span class="pill">${t("dauerhaft")}</span>` : "")
       + (it.disabled ? `<span class="pill orange">${t("deaktiviert")}</span>` : "");
     const when = it.interval ? t("alle {n} Min.", { n: Math.round(it.interval / 60) }) : it.run_at_load ? t("beim Start") : t("bei Bedarf");
-    let acts = `<button class="act" data-path="${esc(it.path)}" title="${t("Datei im Finder zeigen")}">${svg("finder")}</button>`;
-    if (it.brew_service && SAFE.test(it.brew_service)) acts += `<button class="act" data-copy="brew services stop ${esc(it.brew_service)}" title="${t("Befehl zum Stoppen kopieren")}">${svg("copy")}</button>`;
+    let acts = `<button class="act" data-path="${esc(it.path)}" title="${t("Datei im Finder zeigen")}" aria-label="${t("Datei im Finder zeigen")}">${svg("finder")}</button>`;
+    if (it.brew_service && SAFE.test(it.brew_service)) acts += `<button class="act" data-copy="brew services stop ${esc(it.brew_service)}" title="${t("Befehl zum Stoppen kopieren")}" aria-label="${t("Befehl zum Stoppen kopieren")}">${svg("copy")}</button>`;
     return `<div class="row" title="${esc(it.path)}">
       ${icon ? `<div class="ricon"><img src="${esc(icon)}" alt=""></div>` : `<div class="ricon glyph" style="${tileBg(it.brew_service ? "brew_formulae" : "autostart")}">${svg(it.brew_service ? "brew_formulae" : "autostart")}</div>`}
       <div class="rmain"><div class="rname">${esc(it.brew_service ? t("Homebrew-Dienst: {s}", { s: it.brew_service }) : it.label)}${pills}</div>
@@ -1121,7 +1194,7 @@ function pageNotes() {
   const row = (e) => {
     const cat = e.cat || { id: e.key.split(":")[0] };
     const sub = [e.cat ? label(e.cat) : "", e.it.version, e.missing ? t("nicht mehr installiert") : ""].filter(Boolean).map(esc).join(" · ");
-    const edit = state.source === "own" ? `<div class="ractions" style="opacity:1"><button class="act has-note" data-note="${esc(e.key)}" title="${t("Bearbeiten")}">${svg("note")}</button></div>` : "";
+    const edit = state.source === "own" ? `<div class="ractions" style="opacity:1"><button class="act has-note" data-note="${esc(e.key)}" title="${t("Bearbeiten")}" aria-label="${t("Bearbeiten")}">${svg("note")}</button></div>` : "";
     return `<div class="row">${iconHtml(e.it, cat)}
       <div class="rmain"><div class="rname">${esc(e.it.name)}${tagPills(e.note)}</div><div class="rsub">${sub}</div>
         ${e.note.note ? `<div class="rnote" style="white-space:pre-wrap">${esc(e.note.note)}</div>` : ""}</div>${edit}</div>`;
@@ -1206,8 +1279,76 @@ function openNoteSheet(key) {
   });
 }
 
+// ── Quick open (⌘K) ────────────────────────────────────────────────
+// One list of pages, actions and entries; typing narrows it, ↑/↓ + Enter runs the selection.
+function paletteSources() {
+  const pages = [["overview", t("Übersicht"), "overview"]];
+  if (state.data) {
+    if (state.source === "snapshot") pages.push(["compare", t("Vergleich"), "compare"], ["migrate", t("Umzug"), "import"]);
+    else for (const [, items] of ownPages()) for (const [id, text, , icon] of items) pages.push([id, text, icon]);
+    for (const c of cats()) if (c.count) pages.push([c.id, label(c), c.id]);
+  }
+  pages.push(["settings", t("Einstellungen"), "settings"]);
+  const out = pages.map(([id, text, icon]) => ({ kind: t("Seite"), text, icon, run: () => go(id) }));
+  const act = (text, icon, run, on = true) => on && out.push({ kind: t("Aktion"), text, icon, run });
+  act(t("Mac neu scannen"), "scan", () => startScan(), !state.scanning);
+  act(t("Snapshot importieren …"), "import", () => window.inventory.import());
+  act(t("Exportieren …"), "brewfile", () => window.inventory.export(), !!state.data);
+  act(t("PDF-Bericht sichern …"), "pdf", () => saveReport(), !!state.data);
+  act(t("CSV exportieren …"), "script", () => window.inventory.exportCsv(), ownMode());
+  act(t("Brewfile exportieren …"), "brewfile", () => window.inventory.exportBrewfile(), ownMode());
+  const entries = [];
+  for (const c of cats()) for (const it of c.items || []) {
+    entries.push({ kind: label(c), text: it.name, sub: it.version, item: it, cat: c, run: () => { go(c.id); openInspector(`${c.id}|${it.name}`); } });
+  }
+  return { fixed: out, entries };
+}
+function openPalette() {
+  if ($("palette")) return $("palQ").focus();
+  const { fixed, entries } = paletteSources();
+  const bg = document.createElement("div");
+  bg.className = "sheet-bg"; bg.id = "palette";
+  bg.innerHTML = `<div class="sheet palette" role="dialog" aria-label="${t("Schnellsuche")}">
+    <div class="pal-in">${svg("finder")}<input id="palQ" placeholder="${t("Seite, Eintrag oder Aktion suchen …")}" spellcheck="false" autocomplete="off" role="combobox" aria-controls="palList" aria-expanded="true"></div>
+    <div class="pal-list" id="palList" role="listbox"></div>
+    <div class="pal-foot"><span><kbd>↑</kbd><kbd>↓</kbd> ${t("auswählen")}</span><span><kbd>↵</kbd> ${t("öffnen")}</span><span><kbd>esc</kbd> ${t("schließen")}</span></div></div>`;
+  document.body.appendChild(bg);
+  const inp = bg.querySelector("#palQ"), list = bg.querySelector("#palList");
+  let shown = [], idx = 0;
+  const icon = (r) => r.item ? iconHtml(r.item, r.cat) : `<div class="ricon glyph" style="${tileBg(r.icon)}">${svg(r.icon)}</div>`;
+  const draw = () => {
+    const q = inp.value.trim().toLowerCase();
+    // Exact name first, then names starting with the query, then the rest; entries only once something is typed
+    const score = (r) => { const n = r.text.toLowerCase(); return n === q ? 0 : n.startsWith(q) ? 1 : n.includes(q) ? 2 : 9; };
+    const rank = (a) => a.map((r) => [score(r), r]).filter(([sc]) => sc < 9).sort((x, y) => x[0] - y[0]).map(([, r]) => r);
+    shown = q ? [...rank(fixed), ...rank(entries)].slice(0, 50) : fixed;
+    idx = Math.min(idx, Math.max(0, shown.length - 1));
+    list.innerHTML = shown.length ? shown.map((r, i) => `<div class="pal-row${i === idx ? " on" : ""}" role="option" aria-selected="${i === idx}" data-i="${i}">
+      ${icon(r)}<div class="rmain"><div class="rname">${hl(r.text, q)}</div>${r.sub ? `<div class="rsub">${esc(r.sub)}</div>` : ""}</div><span class="pal-kind">${esc(r.kind)}</span></div>`).join("")
+      : `<div class="pal-empty">${t("Keine Treffer")}</div>`;
+    list.querySelector(".pal-row.on")?.scrollIntoView({ block: "nearest" });
+  };
+  const close = () => { bg.remove(); document.removeEventListener("keydown", onKey, true); };
+  const run = (i) => { const r = shown[i]; if (!r) return; close(); r.run(); };
+  const onKey = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      idx = (idx + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % Math.max(1, shown.length); draw();
+    } else if (e.key === "Enter") { e.preventDefault(); run(idx); }
+  };
+  document.addEventListener("keydown", onKey, true);
+  inp.addEventListener("input", () => { idx = 0; draw(); });
+  bg.addEventListener("click", (e) => {
+    if (e.target === bg) return close();
+    const row = e.target.closest(".pal-row");
+    if (row) run(Number(row.dataset.i));
+  });
+  draw(); inp.focus();
+}
+
 // ── PDF report ─────────────────────────────────────────────────────
-const REPORT_CATS = ["apps", "mas", "brew_casks", "brew_formulae", "npm", "pip", "gem", "vscode", "docker_images", "claude_plugins", "claude_mcp", "user_apps"];
+const REPORT_CATS = ["apps", "mas", "brew_casks", "brew_formulae", "npm", "pip", "gem", ...EXTRA_CATS, "vscode", "docker_images", "claude_plugins", "claude_mcp", "user_apps"];
 function buildReportHtml() {
   const d = state.data, s = d.system || {};
   const marketing = s.marketing_name || s.model_name || "Mac";
@@ -1418,8 +1559,8 @@ function storageRow(r, max) {
   const noAccess = r.id === "trash" && !r.bytes;
   const sub = [r.path, t(r.hint)].filter(Boolean).map(esc).join(" · ");
   let acts = "";
-  if (r.cmd) acts += `<button class="act" data-copy="${esc(r.cmd)}" title="${t("Befehl kopieren")}">${svg("copy")}</button>`;
-  if (r.cmd) acts += `<button class="act" data-runcmd="${esc(r.id)}" title="${t("Im Terminal ausführen")}">${svg("terminal")}</button>`;
+  if (r.cmd) acts += `<button class="act" data-copy="${esc(r.cmd)}" title="${t("Befehl kopieren")}" aria-label="${t("Befehl kopieren")}">${svg("copy")}</button>`;
+  if (r.cmd) acts += `<button class="act" data-runcmd="${esc(r.id)}" title="${t("Im Terminal ausführen")}" aria-label="${t("Im Terminal ausführen")}">${svg("terminal")}</button>`;
   const size = noAccess ? t("kein Zugriff") : r.bytes ? fmtBytes(r.bytes) : "–";
   const bar = `<div class="sizebar">${size}${r.bytes && max ? `<div class="bar ${r.safe ? "" : "warn"}"><span style="width:${Math.max(2, Math.round((r.bytes / max) * 100))}%"></span></div>` : ""}</div>`;
   const box = r.cmd && r.bytes ? pickBox("storage", r.group, r.id, r) : `<span class="pick pick-none"></span>`;
@@ -1488,11 +1629,11 @@ function pageVersions() {
     <div class="ractions"><button class="act" data-copy="${esc(b.formulae.map((f) => `brew uses --installed ${f}`).join("; "))}" title="${t("Prüfbefehl kopieren")}">${svg("copy")}</button></div></div>`).join("");
   const dupRows = v.dup_apps.map((d) => `<div class="row"><div class="ricon glyph" style="${tileBg("apps")}">${svg("apps")}</div>
     <div class="rmain"><div class="rname">${esc(d.name)}</div><div class="rsub">${esc(t(DUP_REASON[d.reason] || d.reason))}</div></div>
-    <div class="ractions"><button class="act" data-reveal="${esc(d.name)}" title="${t("Im Finder zeigen")}">${svg("finder")}</button></div></div>`).join("");
+    <div class="ractions"><button class="act" data-reveal="${esc(d.name)}" title="${t("Im Finder zeigen")}" aria-label="${t("Im Finder zeigen")}">${svg("finder")}</button></div></div>`).join("");
   const xcodeRows = v.xcodes.length > 1 ? v.xcodes.map((x) => `<div class="row"><div class="ricon glyph" style="${tileBg("brew_formulae")}">${svg("brew_formulae")}</div><div class="rmain"><div class="rname">${esc(x.split("/").pop())}</div><div class="rsub">${esc(x)}</div></div></div>`).join("") : "";
   const orphanRows = v.orphans.length ? `<div class="row"><div class="ricon glyph" style="${tileBg("cleanup")}">${svg("cleanup")}</div>
     <div class="rmain"><div class="rname">${esc(v.orphans.join(", "))}</div><div class="rsub">brew autoremove</div></div>
-    <div class="ractions"><button class="act" data-copy="brew autoremove" title="${t("Befehl kopieren")}">${svg("copy")}</button></div></div>` : "";
+    <div class="ractions"><button class="act" data-copy="brew autoremove" title="${t("Befehl kopieren")}" aria-label="${t("Befehl kopieren")}">${svg("copy")}</button></div></div>` : "";
   const flagged = versionsFlagged();
   return `<div class="page">${head}
     <div class="ov-grid" style="margin-top:0">
@@ -1544,7 +1685,7 @@ function networkSections() {
         <div class="ricon glyph" style="${tileBg("globe")}">${svg("globe")}</div>
         <div class="rmain"><div class="rname">${esc(x.name)}<span class="pill">${esc(b)}</span>${x.enabled === false ? `<span class="pill orange">${t("deaktiviert")}</span>` : ""}</div>
           <div class="rsub">${esc([x.version, x.app, x.id].filter(Boolean).join(" · "))}</div></div>
-        ${x.url ? `<div class="ractions"><button class="act" data-url="${esc(x.url)}" title="${t("Website öffnen")}">${svg("link")}</button></div>` : ""}</div>`).join("")}</div>`).join("") || `<div class="noresults" style="padding:20px">${t("Keine Browser-Erweiterungen gefunden.")}</div>`}`;
+        ${x.url ? `<div class="ractions"><button class="act" data-url="${esc(x.url)}" title="${t("Website öffnen")}" aria-label="${t("Website öffnen")}">${svg("link")}</button></div>` : ""}</div>`).join("")}</div>`).join("") || `<div class="noresults" style="padding:20px">${t("Keine Browser-Erweiterungen gefunden.")}</div>`}`;
   }
   return html;
 }
@@ -1658,7 +1799,7 @@ function migrationSteps() {
     { id: "homebrew", title: "Homebrew installieren", desc: "Paketverwaltung für fast alle weiteren Schritte.", open: hasBrew ? 0 : 1, run: hasBrew ? null : '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"', icon: "brew_formulae", link: "https://brew.sh" },
     { id: "brew", title: "Programme & Tools über Homebrew", desc: "Fehlende Homebrew-Formeln und -Casks.", open: miss(["brew_formulae", "brew_casks"]) + appsWithCask, script: ["brew"], icon: "brew_casks", needs: "homebrew" },
     { id: "mas", title: "Apps aus dem App Store", desc: "Vorher im App Store anmelden.", open: miss(["mas"]) + appsWithMas, script: ["mas"], icon: "mas", needs: "homebrew" },
-    { id: "dev", title: "Entwickler-Pakete", desc: "npm-, pip- und Ruby-Pakete.", open: miss(["npm", "pip", "gem"]), script: ["dev"], icon: "npm" },
+    { id: "dev", title: "Entwickler-Pakete", desc: "npm, pip, Ruby, Rust, Go und weitere Paketmanager.", open: miss(["npm", "pip", "gem", ...EXTRA_CATS]), script: ["dev"], icon: "npm" },
     { id: "code", title: "VS-Code-Erweiterungen", desc: "Braucht den Befehl „code\" (VS Code → Shell-Befehl installieren).", open: miss(["vscode"]), script: ["code"], icon: "vscode" },
     { id: "manual", title: "Programme von Hand installieren", desc: "Für diese Programme gibt es keine Paketquelle.", open: manual.length, manual, icon: "apps" },
     { id: "settings", title: "Einstellungen übernehmen", desc: "Auf dem alten Mac unter „Einstellungen mitnehmen\" ein Paket sichern, hier „Wiederherstellen.command\" doppelklicken.", open: null, icon: "settings" },
@@ -1680,7 +1821,7 @@ function pageMigrate() {
     let btn = "";
     if (x.open && x.script) btn = `<button class="btn primary" data-migrate="${x.id}">${svg("terminal")} ${t("Im Terminal ausführen")}</button>`;
     if (x.open && x.run) btn = `<button class="btn primary" data-migrate="${x.id}">${svg("terminal")} ${t("Im Terminal ausführen")}</button>` + (x.link ? ` <button class="btn" data-url="${x.link}">${svg("link")} brew.sh</button>` : "");
-    const manual = x.manual?.length ? `<div class="group" style="margin-top:8px">${x.manual.map((it) => `<div class="row" style="min-height:38px"><div class="rmain"><div class="rname">${esc(it.name)}</div></div>${it.install_url ? `<div class="ractions" style="opacity:1"><button class="act" data-url="${esc(it.install_url)}" title="${t("Website öffnen")}">${svg("link")}</button></div>` : ""}</div>`).join("")}</div>` : "";
+    const manual = x.manual?.length ? `<div class="group" style="margin-top:8px">${x.manual.map((it) => `<div class="row" style="min-height:38px"><div class="rmain"><div class="rname">${esc(it.name)}</div></div>${it.install_url ? `<div class="ractions" style="opacity:1"><button class="act" data-url="${esc(it.install_url)}" title="${t("Website öffnen")}" aria-label="${t("Website öffnen")}">${svg("link")}</button></div>` : ""}</div>`).join("")}</div>` : "";
     return `<div class="card mig-step${x.open === 0 ? " done" : ""}"><div class="ch"><span class="mig-num">${i + 1}</span><span class="tile" style="${tileBg(x.icon)}">${svg(x.icon)}</span>${t(x.title)} ${status}</div>
       <div class="muted">${t(x.desc)}</div>${btn ? `<div class="btns" style="justify-content:flex-start;margin-top:6px">${btn}</div>` : ""}${manual}</div>`;
   };
@@ -1756,7 +1897,7 @@ function pageLicenses() {
         <div class="rmain"><div class="rname">${esc(e.it.name)}${tagPills(e.note)}</div>
           <div class="rsub">${[e.note.price ? money(e.note.price, e.note.currency) : "", e.note.cycle ? t(CYCLE[e.note.cycle]) : "", next ? t("Verlängerung {d}", { d: next.toLocaleDateString(LOC(), { dateStyle: "medium" }) }) : ""].filter(Boolean).map(esc).join(" · ")}</div></div>
         ${when ? `<span class="pill ${days != null && days <= 7 ? "orange" : ""}" style="margin:0">${esc(when)}</span>` : ""}
-        <div class="ractions" style="opacity:1"><button class="act has-note" data-note="${esc(e.key)}" title="${t("Bearbeiten")}">${svg("note")}</button></div></div>`;
+        <div class="ractions" style="opacity:1"><button class="act has-note" data-note="${esc(e.key)}" title="${t("Bearbeiten")}" aria-label="${t("Bearbeiten")}">${svg("note")}</button></div></div>`;
     }).join("")}</div>
     <div class="foot-note">${t("Erinnerung 7 Tage vor jeder Verlängerung – in den Einstellungen abschaltbar.")}</div>
   </div>`;
@@ -1780,6 +1921,23 @@ function setRow(icon, title, hint, control) {
   return `<div class="row set-row"><div class="ricon glyph" style="${tileBg(icon)}">${svg(icon)}</div>
     <div class="rmain"><div class="rname">${title}</div>${hint ? `<div class="rsub" style="white-space:normal">${hint}</div>` : ""}</div>
     <div class="set-ctl">${control}</div></div>`;
+}
+// Status of MacAtlas itself: up to date, new release available, or installing
+const UPD_PHASE = { download: "Wird geladen …", verify: "Signatur wird geprüft …", install: "Wird installiert – MacAtlas startet gleich neu …" };
+function appUpdateRow() {
+  const u = state.appUpdate || {}, p = state.appUpdateProgress;
+  if (u.busy || p) {
+    const pct = p && p.pct != null ? ` ${p.pct} %` : "";
+    return setRow("updates", t("Update wird installiert"), t(UPD_PHASE[p?.phase] || UPD_PHASE.download) + pct, `<div class="spin small"></div>`);
+  }
+  if (u.available) {
+    return setRow("updates", t("Version {v} ist verfügbar", { v: esc(u.available.version) }), t("Du hast Version {c}.", { c: esc(u.current) })
+      + ` <a href="#" data-url="${esc(u.available.page)}">${t("Was ist neu?")}</a>`,
+      `<button class="btn primary" data-do="installupdate">${t("Jetzt aktualisieren")}</button>`);
+  }
+  const when = u.checked ? t("zuletzt geprüft {w}", { w: relTime(new Date(u.checked).toISOString()) }) : t("noch nicht geprüft");
+  return setRow("updates", t("MacAtlas ist aktuell"), `${t("Version {c}", { c: esc(u.current || state.settings?.version || "") })} · ${when}`,
+    `<button class="btn" data-do="checkupdate"${state.checkingUpdate ? " disabled" : ""}>${state.checkingUpdate ? t("Wird geprüft …") : t("Jetzt prüfen")}</button>`);
 }
 function pageSettings() {
   const s = state.settings;
@@ -1808,6 +1966,8 @@ function pageSettings() {
     <div class="group">
       ${setRow("warn", t("Bei Änderungen warnen"), t("Nach einem Scan im Hintergrund: neue Programme, neue Hintergrunddienste, schwächerer Schutz oder neu geöffnete Ports."), toggle("warnChanges", s.warnChanges))}
       ${setRow("notes", t("An Abo-Verlängerungen erinnern"), t("7 Tage vorher – für Abos mit Datum in den Notizen."), toggle("remindRenewals", s.remindRenewals))}
+      ${setRow("bell", t("Mitteilungen testen"), t("Erscheint nichts, MacAtlas in den Systemeinstellungen unter „Mitteilungen\" erlauben."),
+        `<button class="btn" data-do="testnotify">${t("Test senden")}</button><button class="btn" data-settings="com.apple.Notifications-Settings.extension">${t("Systemeinstellungen …")}</button>`)}
     </div>
     <div class="group-title">${t("Mehrere Macs")}</div>
     <div class="group">
@@ -1818,7 +1978,7 @@ function pageSettings() {
     <div class="hint">${t("In der Kurzbefehle-App die Aktion „URL öffnen\" verwenden – oder im Terminal: open macatlas://scan. Berichte und Exporte landen in {d}.", { d: esc(s.exportDir || "~/Documents/MacAtlas") })}</div>
     <div class="group">
       ${[["macatlas://scan", "Mac scannen"], ["macatlas://report", "PDF-Bericht sichern"], ["macatlas://csv", "CSV exportieren"], ["macatlas://export", "JSON exportieren"], ["macatlas://open/updates", "Updates öffnen"]]
-        .map(([u, d]) => setRow("terminal", `<code style="font:12px var(--mono)">${u}</code>`, t(d), `<button class="act" style="opacity:1" data-copy="${u}" title="${t("Kopieren")}">${svg("copy")}</button>`)).join("")}
+        .map(([u, d]) => setRow("terminal", `<code style="font:12px var(--mono)">${u}</code>`, t(d), `<button class="act" style="opacity:1" data-copy="${u}" title="${t("Kopieren")}" aria-label="${t("Kopieren")}">${svg("copy")}</button>`)).join("")}
       ${setRow("folder", t("Ordner für Berichte & Exporte"), esc(s.exportDir || ""), `<button class="btn" data-do="openautodir">${t("Öffnen")}</button>`)}
     </div>
     <div class="group-title">${t("Daten")}</div>
@@ -1829,6 +1989,11 @@ function pageSettings() {
       ${setRow("warn", t("Zurücksetzen"), t("Verlauf: {a} · Notizen: {b}", { a: pl(s.historyCount, "{n} Scan", "{n} Scans"), b: nf.format(s.notesCount) }),
         `<button class="btn" data-do="clearhistory"${s.historyCount ? "" : " disabled"}>${t("Verlauf löschen …")}</button>
          <button class="btn" data-do="clearnotes"${s.notesCount ? "" : " disabled"}>${t("Notizen löschen …")}</button>`)}
+    </div>
+    <div class="group-title">${t("MacAtlas aktualisieren")}</div>
+    <div class="group">
+      ${appUpdateRow()}
+      ${setRow("bell", t("Automatisch nach Updates suchen"), t("Einmal am Tag bei GitHub. Dabei werden keine Daten über deinen Mac gesendet."), toggle("updateCheck", s.updateCheck))}
     </div>
     <div class="group-title">${t("Über")}</div>
     <div class="group">
@@ -1841,7 +2006,7 @@ function pageSettings() {
       ${setRow("script", t("Quellcode"), "github.com/m4rcelnoel/MacAtlas", `<button class="btn" data-url="${REPO_URL}">GitHub</button>`)}
       ${setRow("warn", t("Fehler melden & Ideen"), t("Issue auf GitHub öffnen"), `<button class="btn" data-url="${REPO_URL}/issues">${t("Öffnen")}</button>`)}
       ${kv("Electron", esc(s.electron))}
-      ${kv(t("Tastenkürzel"), "⌘R " + t("Scannen") + " · ⌘E " + t("Export") + " · ⇧⌘E Brewfile · ⌘P PDF · ⌘I Import · ⌘F " + t("Suche") + " · ⌘, " + t("Einstellungen"))}
+      ${kv(t("Tastenkürzel"), "⌘R " + t("Scannen") + " · ⌘E " + t("Export") + " · ⇧⌘E Brewfile · ⌘P PDF · ⌘I Import · ⌘F " + t("Suche") + " · ⌘K " + t("Schnellsuche") + " · ↑↓ " + t("Liste") + " · ⌘, " + t("Einstellungen"))}
     </div>
   </div>`;
 }
@@ -1937,6 +2102,8 @@ document.addEventListener("click", async (e) => {
     return changeSetting(key, ch.dataset.value);
   }
   if (e.target.closest("label.pick")) return;   // handled by the change event
+  const ns = e.target.closest("[data-navsec]");
+  if (ns) return toggleNavSec(ns.dataset.navsec);
   const pa = e.target.closest("[data-pickall]");
   if (pa) {
     const [ctx, group, on] = pa.dataset.pickall.split("|");
@@ -1980,6 +2147,24 @@ document.addEventListener("click", async (e) => {
     case "closeinspector": return closeInspector();
     case "scan": return startScan();
     case "cancelscan": return window.inventory.cancelScan();
+    case "checkupdate": {
+      state.checkingUpdate = true; render({ keepScroll: true });
+      const r = await window.inventory.checkAppUpdate();
+      state.checkingUpdate = false; state.appUpdate = r;
+      if (r.error) toast(t("Prüfen fehlgeschlagen: {e}", { e: esc(r.error) }), 4500);
+      else if (!r.available) toast(t("MacAtlas ist aktuell"));
+      return render({ keepScroll: true });
+    }
+    case "installupdate": {
+      state.appUpdateProgress = { phase: "download", pct: 0 }; render({ keepScroll: true });
+      const r = await window.inventory.installAppUpdate();
+      if (r !== true) state.appUpdateProgress = null;
+      if (r === "manual") toast(t("Das Update liegt in „Downloads\" – MacAtlas in den Programme-Ordner ziehen."), 6000);
+      return render({ keepScroll: true });
+    }
+    case "testnotify":
+      return toast((await window.inventory.testNotification()) ? t("Test-Mitteilung gesendet") : t("Mitteilungen werden auf diesem Mac nicht unterstützt"), 3500);
+    case "installclt": return runInTerminal("Command Line Tools installieren", "xcode-select --install");
     case "import": return window.inventory.import();
     case "brewfile": return window.inventory.exportBrewfile();
     case "report": return saveReport();
@@ -2064,10 +2249,50 @@ $("scrim").onclick = () => document.body.classList.remove("sb-open");
 $("gearBtn").onclick = () => go("settings");
 document.addEventListener("keydown", (e) => {
   const mod = e.metaKey || e.ctrlKey;
-  if (mod && (e.key === "f" || e.key === "k")) { e.preventDefault(); $("q").focus(); $("q").select(); }
+  const key = e.key.toLowerCase();
+  if (mod && key === "k") { e.preventDefault(); return openPalette(); }
+  if (mod && key === "f") { e.preventDefault(); $("q").focus(); $("q").select(); }
   if (mod && e.key === ",") { e.preventDefault(); go("settings"); }
   if (e.key === "Escape" && document.activeElement === $("q")) $("qClear").click();
   else if (e.key === "Escape" && state.inspect && !document.querySelector(".sheet-bg")) closeInspector();
+  else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !mod && !e.altKey) arrowNav(e);
+});
+
+// ↑/↓: move through the sidebar when it has focus, otherwise through the entries of the
+// current list (the detail panel follows). Text fields and dialogs keep their own keys.
+function arrowNav(e) {
+  const a = document.activeElement;
+  if (document.querySelector(".sheet-bg") || (a && a.matches("input:not([type=checkbox]), textarea, select"))) return;
+  const step = e.key === "ArrowDown" ? 1 : -1;
+  if (a && a.closest("#nav")) {
+    const btns = [...$("nav").querySelectorAll("button")];
+    const next = btns[btns.indexOf(a) + step];
+    if (next) { e.preventDefault(); next.focus(); }
+    return;
+  }
+  const rows = [...$("content").querySelectorAll("[data-open]")];
+  if (!rows.length) return;
+  e.preventDefault();
+  const cur = rows.findIndex((r) => r.dataset.open === state.inspect?.key);
+  const next = rows[cur < 0 ? (step > 0 ? 0 : rows.length - 1) : Math.max(0, Math.min(rows.length - 1, cur + step))];
+  openInspector(next.dataset.open);
+  next.scrollIntoView({ block: "nearest" });
+}
+
+// Drag a exported scan (.json) onto the window to open it
+let dragDepth = 0;
+const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
+document.addEventListener("dragenter", (e) => { if (hasFiles(e)) { dragDepth++; document.body.classList.add("dropping"); } });
+document.addEventListener("dragleave", (e) => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dropping"); } });
+document.addEventListener("dragover", (e) => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } });
+document.addEventListener("drop", (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0; document.body.classList.remove("dropping");
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!/\.json$/i.test(file.name)) return toast(t("Bitte eine exportierte MacAtlas-Datei (.json) ablegen"), 3500);
+  window.inventory.importFile(file);
 });
 
 function startScan(keepSnapshot) {
@@ -2086,7 +2311,10 @@ window.inventory.onScanStarted(() => {
 window.inventory.onScanProgress((p) => {
   state.progress = p;
   const bar = $("progBar"), step = $("progStep");
-  if (bar && step) { bar.style.width = Math.round((p.step / p.total) * 100) + "%"; step.textContent = stepLabel(p); }
+  if (bar && step) {
+    bar.style.width = Math.round((p.step / p.total) * 100) + "%"; step.textContent = stepLabel(p);
+    if ($("progCounts")) $("progCounts").innerHTML = scanCountsHtml(p);
+  }
   else render();
 });
 window.inventory.onScanDone(async (p) => {
@@ -2103,6 +2331,16 @@ window.inventory.onReportAuto(async () => {
   if (state.data && state.source === "own") window.inventory.savePdfAuto(buildReportHtml());
 });
 window.inventory.onToast(({ msg, ms }) => toast(esc(msg), ms));
+window.inventory.onAppUpdate((u) => {
+  const fresh = u.available && state.appUpdate?.available?.version !== u.available.version;
+  state.appUpdate = u;
+  if (fresh) toast(t("MacAtlas {v} ist verfügbar – Einstellungen → MacAtlas aktualisieren", { v: esc(u.available.version) }), 6000);
+  if (state.sel === "settings") render({ keepScroll: true });
+});
+window.inventory.onAppUpdateProgress((p) => {
+  state.appUpdateProgress = p;
+  if (state.sel === "settings") render({ keepScroll: true });
+});
 window.inventory.onFocus((f) => document.body.classList.toggle("inactive", !f));
 window.inventory.onAccent((c) => c && document.documentElement.style.setProperty("--accent", c));
 window.inventory.onSettings((s) => {
@@ -2129,6 +2367,7 @@ async function load() {
 
 (async () => {
   try { state.settings = await window.inventory.getSettings(); } catch { state.settings = null; }
+  try { state.appUpdate = await window.inventory.appUpdate(); } catch { state.appUpdate = null; }
   setLanguage(state.settings?.resolvedLanguage || "de");
   await load();
 })();
