@@ -30,14 +30,15 @@ Setting up a new Mac, cleaning up an old one or just answering *"what did I inst
 ### Inventory
 - Apps in `/Applications` (with Homebrew cask / App Store source detection), Mac App Store, Homebrew formulae & casks, npm, pip, Ruby gems, VS Code extensions, Docker images & containers, fonts, Claude Code plugins, skills and MCP servers.
 - An install command and website for every entry, full-text search (⌘F) across everything including your notes.
+- Every list can be filtered (with update, Homebrew, App Store, no package source, with note, Intel only, unused) and sorted by name, size, last use or source. Click an entry for a detail panel with its update, install/update/uninstall commands, note and all known facts.
 - Hardware: model, chip, cores, memory, storage, battery health, displays, uptime.
 
 ### Maintenance
 
 <img src="docs/images/updates.png" width="100%" alt="Updates">
 
-- **Updates** – outdated Homebrew packages, App Store apps, npm/pip/gems, pending macOS updates and apps installed outside Homebrew (checked against the Homebrew catalog). *Update All* runs one script in Terminal.
-- **Storage** – Xcode DerivedData, simulators, device support files, Docker build cache, Homebrew/npm/pip/Gradle/CocoaPods caches and more, each with its size and the command to clean it. Safe caches can be cleaned in one go – MacAtlas never deletes anything itself, every command runs in Terminal after you confirm.
+- **Updates** – outdated Homebrew packages, App Store apps, npm/pip/gems, pending macOS updates and apps installed outside Homebrew (checked against the Homebrew catalog). Tick what you want and *Update Selected* runs one script in Terminal (pinned packages start unticked).
+- **Storage** – Xcode DerivedData, simulators, device support files, Docker build cache, Homebrew/npm/pip/Gradle/CocoaPods caches and more, each with its size and the command to clean it. Safe caches start ticked and the selection is cleaned in one go – MacAtlas never deletes anything itself, every command runs in Terminal after you confirm.
 - **Versions & duplicates** – runtimes installed several times (Python, Node, Ruby, Java…) and which one actually runs, Homebrew packages in several versions, duplicate apps, orphaned dependencies.
 - **Security** – FileVault, firewall, SIP, Gatekeeper, screen lock, automatic updates, open network ports (reachable from outside vs. local only), system and browser extensions.
 - **Clean up** – size, last use, architecture (Intel-only apps) and code signature of every app.
@@ -54,7 +55,7 @@ Setting up a new Mac, cleaning up an old one or just answering *"what did I inst
 </p>
 
 ### Moving to a new Mac
-- **Export / import** a scan (JSON) and **compare** two Macs: what's missing here, as an install script or a `Brewfile`.
+- **Export / import** a scan (JSON) and **compare** two Macs: what's missing here, as an install script or a `Brewfile`. Untick anything you don't want; the migration assistant uses the same selection.
 - **Migration assistant** – step by step: Homebrew, Homebrew apps, App Store, developer packages, VS Code, manual downloads. *Check this Mac again* ticks off what's done.
 - **Take settings along** – a ZIP with your shell, Git, SSH config (never keys), VS Code/Cursor settings and Dock/Finder/screenshot/trackpad preferences, plus a restore script. Values that look like passwords or tokens are replaced automatically.
 - **My Macs** – optionally share every scan through an iCloud Drive folder and see all your Macs side by side.

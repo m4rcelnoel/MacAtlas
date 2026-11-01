@@ -374,27 +374,227 @@ function subline(it, cat) {
   else if (it.install_desc && !/^Homebrew Cask:|^Websuche$|^Mac App Store$/.test(it.install_desc)) parts.push(esc(installDesc(it.install_desc)));
   return parts.join(" · ");
 }
-function rowHtml(it, cat, q) {
+// opts.pick = { ctx, group } adds a selection checkbox (compare / migration lists)
+const openKey = (cat, it) => esc(`${cat.id}|${it.name}`);
+function rowHtml(it, cat, q, opts = {}) {
   const sub = subline(it, cat);
   const note = noteOf(cat, it);
   const src = it.install_cmd ? it.install_cmd.split(" ")[0] : "";
   const cmd = it.install_cmd ? `<div class="rcmd"><span class="badge ${esc(src)}">${esc(src)}</span><code>${esc(it.install_cmd)}</code></div>` : "";
-  return `<div class="row" title="${esc(it.bundle_id || it.name)}">
-    ${iconHtml(it, cat)}
-    <div class="rmain"><div class="rname">${hl(it.name, q)}${tagPills(note)}</div>${sub ? `<div class="rsub">${sub}</div>` : ""}${note?.note ? `<div class="rnote">${hl(note.note.split("\n")[0], q)}</div>` : ""}</div>
+  const upd = updateFor(cat, it);
+  const pick = opts.pick ? pickBox(opts.pick.ctx, opts.pick.group, pickKey(cat, it), it) : "";
+  return `<div class="row clickable${state.inspect?.key === `${cat.id}|${it.name}` ? " current" : ""}" data-open="${openKey(cat, it)}" title="${esc(it.bundle_id || it.name)}">
+    ${pick}${iconHtml(it, cat)}
+    <div class="rmain"><div class="rname">${hl(it.name, q)}${upd ? `<span class="pill blue">${t("Update")}</span>` : ""}${tagPills(note)}</div>${sub ? `<div class="rsub">${sub}</div>` : ""}${note?.note ? `<div class="rnote">${hl(note.note.split("\n")[0], q)}</div>` : ""}</div>
     ${cmd}${actionsHtml(it, cat)}
   </div>`;
 }
-function tileHtml(it, cat, q) {
-  return `<div class="tilecard" title="${esc(it.install_cmd || it.bundle_id || it.name)}">
-    ${iconHtml(it, cat, true)}
+function tileHtml(it, cat, q, opts = {}) {
+  const pick = opts.pick ? pickBox(opts.pick.ctx, opts.pick.group, pickKey(cat, it), it, "tile-pick") : "";
+  return `<div class="tilecard clickable" data-open="${openKey(cat, it)}" title="${esc(it.install_cmd || it.bundle_id || it.name)}">
+    ${pick}${iconHtml(it, cat, true)}
     <div class="tname">${hl(it.name, q)}</div><div class="tver">${esc(it.version || "")}</div>
     ${actionsHtml(it, cat)}
   </div>`;
 }
-function itemsHtml(items, cat, q) {
-  if (state.view === "grid") return `<div class="tiles">${items.map((it) => tileHtml(it, cat, q)).join("")}</div>`;
-  return `<div class="group">${items.map((it) => rowHtml(it, cat, q)).join("")}</div>`;
+function itemsHtml(items, cat, q, opts = {}) {
+  if (state.view === "grid") return `<div class="tiles">${items.map((it) => tileHtml(it, cat, q, opts)).join("")}</div>`;
+  return `<div class="group">${items.map((it) => rowHtml(it, cat, q, opts)).join("")}</div>`;
+}
+
+// ── Selection: checkboxes decide what goes into generated scripts ──
+// Only deviations from the default are stored, so new entries follow the default.
+const PICK_DEFAULT = {
+  compare: () => true,
+  updates: (it) => !it.pinned,
+  storage: (r) => !!r.safe,   // risky cleanups have to be ticked on purpose
+};
+const pickKey = (cat, it) => `${cat.id}:${it.name}`;
+function pickOverrides(ctx) {
+  if (!state.picks) state.picks = {};
+  if (!state.picks[ctx]) {
+    try { state.picks[ctx] = JSON.parse(store.get("mi-pick-" + ctx, "{}")) || {}; } catch { state.picks[ctx] = {}; }
+  }
+  return state.picks[ctx];
+}
+function isPicked(ctx, key, item) {
+  const o = pickOverrides(ctx);
+  return key in o ? o[key] : PICK_DEFAULT[ctx](item);
+}
+function setPicked(ctx, entries, on) {
+  const o = pickOverrides(ctx);
+  for (const { key, item } of entries) {
+    if (on === PICK_DEFAULT[ctx](item)) delete o[key];
+    else o[key] = on;
+  }
+  store.set("mi-pick-" + ctx, JSON.stringify(o));
+}
+// Filled while a page renders, so "All/None" knows which entries a group contains
+function registerPick(ctx, group, key, item) {
+  const reg = (state.pickRegistry[ctx] ||= {});
+  (reg[group] ||= []).push({ key, item });
+}
+function pickBox(ctx, group, key, item, cls = "") {
+  registerPick(ctx, group, key, item);
+  return `<label class="pick ${cls}" title="${t("Für das Skript auswählen")}"><input type="checkbox" data-pick="${ctx}" data-key="${esc(key)}"${isPicked(ctx, key, item) ? " checked" : ""}></label>`;
+}
+function pickGroupButtons(ctx, group) {
+  return `<span class="pick-all"><button data-pickall="${ctx}|${esc(group)}|1">${t("Alle")}</button><button data-pickall="${ctx}|${esc(group)}|0">${t("Keine")}</button></span>`;
+}
+function pickEntries(ctx, group) {
+  const reg = state.pickRegistry[ctx] || {};
+  return group === "*" ? Object.values(reg).flat() : reg[group] || [];
+}
+function pickSummary(ctx) {
+  const all = pickEntries(ctx, "*");
+  const n = all.filter((e) => isPicked(ctx, e.key, e.item)).length;
+  return `<div class="pick-summary"><b>${t("{a} von {b} ausgewählt", { a: nf.format(n), b: nf.format(all.length) })}</b>${pickGroupButtons(ctx, "*")}</div>`;
+}
+
+// ── Detail panel ────────────────────────────────────────────────────
+const UPDATE_SOURCES_FOR = { apps: ["app", "cask", "mas"], brew_formulae: ["brew"], brew_casks: ["cask"], mas: ["mas"], npm: ["npm"], pip: ["pip"], gem: ["gem"] };
+function updateFor(cat, it) {
+  const sources = UPDATE_SOURCES_FOR[cat.id];
+  if (!sources || state.source !== "own" || !state.data?.updates) return null;
+  if (!state.updateIndex || state.updateIndex.data !== state.data) {
+    const map = new Map();
+    for (const u of state.data.updates.items) map.set(`${u.source}:${u.name.toLowerCase()}`, u);
+    state.updateIndex = { data: state.data, map };
+  }
+  const names = [it.name, it.cask].filter(Boolean).map((n) => n.toLowerCase());
+  for (const s of sources) for (const n of names) { const u = state.updateIndex.map.get(`${s}:${n}`); if (u) return u; }
+  return null;
+}
+function findItem(key) {
+  const i = key.indexOf("|");
+  const cat = catById(key.slice(0, i));
+  const it = cat?.items.find((x) => x.name === key.slice(i + 1));
+  return cat && it ? { cat, it } : null;
+}
+function inspectorHtml(cat, it) {
+  const note = noteOf(cat, it), upd = updateFor(cat, it);
+  const own = state.source === "own";
+  const unsafeCmd = state.source === "snapshot" && it.install_cmd && !/^[A-Za-z0-9@._\/+: -]+$/.test(it.install_cmd);
+  const uninstall = own && it.brew_managed && it.cask && SAFE.test(it.cask) ? `brew uninstall --cask ${it.cask}`
+    : own && cat.id === "brew_formulae" && SAFE.test(it.name) ? `brew uninstall ${it.name}`
+    : own && cat.id === "brew_casks" && SAFE.test(it.name) ? `brew uninstall --cask ${it.name}` : "";
+  const cmdRow = (title, cmd) => `<div class="insp-cmd"><span>${title}</span><div><code>${esc(cmd)}</code>
+    <button class="act" data-copy="${esc(cmd)}" title="${t("Befehl kopieren")}">${svg("copy")}</button></div></div>`;
+  const facts = [
+    [t("Version"), it.version],
+    [t("Kategorie"), label(cat)],
+    [t("Quelle"), installDesc(it.install_desc)],
+    ["Bundle-ID", cat.id === "docker_containers" ? "" : it.bundle_id],
+    [t("Image"), cat.id === "docker_containers" ? it.bundle_id : ""],
+    [t("Größe"), fmtBytes(it.size_bytes)],
+    [t("Zuletzt benutzt"), it.last_used ? `${fmtDate(it.last_used)} · ${lastUsedText(it)}` : ""],
+    [t("Geöffnet"), it.use_count ? pl(it.use_count, "{n}-mal", "{n}-mal") : ""],
+    [t("Architektur"), ARCH[it.arch] ? t(ARCH[it.arch]) : ""],
+    [t("Signatur"), it.signer === "adhoc" ? t("ad hoc signiert") : "signer" in it && !it.signer ? t("nicht signiert") : it.signer],
+    ["Homebrew", it.cask ? `${it.cask}${it.brew_managed ? "" : " · " + t("nicht über Homebrew installiert")}` : it.tap || ""],
+    [t("Abhängigkeit"), "leaf" in it ? (it.leaf ? t("selbst installiert") : t("als Abhängigkeit installiert")) : ""],
+  ].filter(([, v]) => v);
+  return `<div class="insp-head">
+      ${it.icon ? `<img src="${esc(it.icon)}" alt="">` : `<div class="ricon glyph" style="${tileBg(cat.id)}">${svg(cat.id)}</div>`}
+      <div><b>${esc(it.name)}</b><span>${esc(label(cat))}${it.version ? " · " + esc(it.version) : ""}</span></div>
+      <button class="act insp-close" data-do="closeinspector" title="${t("Schließen")}">✕</button>
+    </div>
+    ${upd ? `<div class="insp-update">${svg("updates")}<div><b>${t("Update verfügbar")}</b>
+      <span>${esc(upd.current || "?")} → ${esc(upd.latest)}${upd.auto ? " · " + t("aktualisiert sich selbst") : ""}</span></div></div>` : ""}
+    <div class="insp-actions">
+      ${it.install_url ? `<button class="btn" data-url="${esc(it.install_url)}">${svg("link")} ${t("Website")}</button>` : ""}
+      ${cat.id === "apps" && own ? `<button class="btn" data-reveal="${esc(it.name)}">${svg("finder")} Finder</button>` : ""}
+      ${own ? `<button class="btn" data-note="${esc(noteKey(cat, it))}">${svg("note")} ${note ? t("Notiz bearbeiten") : t("Notiz hinzufügen")}</button>` : ""}
+    </div>
+    ${it.install_cmd && !unsafeCmd ? cmdRow(t("Installieren"), it.install_cmd) : ""}
+    ${upd?.cmd ? cmdRow(t("Aktualisieren"), upd.cmd) : ""}
+    ${uninstall ? cmdRow(t("Deinstallieren"), uninstall) : ""}
+    ${note ? `<div class="insp-note">${tagPills(note)}${note.note ? `<p>${esc(note.note)}</p>` : ""}</div>` : ""}
+    <div class="group insp-facts">${facts.map(([k, v]) => kv(esc(k), esc(v))).join("")}</div>`;
+}
+function openInspector(key) {
+  const found = findItem(key);
+  if (!found) return;
+  state.inspect = { key };
+  let el = $("inspector");
+  if (!el) {
+    el = document.createElement("aside");
+    el.id = "inspector";
+    el.className = "inspector";
+    el.setAttribute("role", "dialog");
+    document.body.appendChild(el);
+  }
+  el.innerHTML = inspectorHtml(found.cat, found.it);
+  requestAnimationFrame(() => el.classList.add("open"));
+  document.querySelectorAll(".row.current").forEach((r) => r.classList.remove("current"));
+  document.querySelectorAll(`[data-open="${CSS.escape(key)}"]`).forEach((r) => r.classList.add("current"));
+}
+function closeInspector() {
+  state.inspect = null;
+  $("inspector")?.classList.remove("open");
+  document.querySelectorAll(".row.current").forEach((r) => r.classList.remove("current"));
+}
+function refreshInspector() {
+  if (!state.inspect) return;
+  const found = findItem(state.inspect.key);
+  if (found && $("inspector")) $("inspector").innerHTML = inspectorHtml(found.cat, found.it);
+  else closeInspector();
+}
+
+// ── Sort & filter for category lists ───────────────────────────────
+const LIST_FILTERS = {
+  all: { label: "Alle", test: () => true },
+  update: { label: "Mit Update", test: (it, cat) => !!updateFor(cat, it) },
+  brew: { label: "Homebrew", test: (it) => /^brew /.test(it.install_cmd || "") },
+  mas: { label: "App Store", test: (it) => /^mas /.test(it.install_cmd || "") },
+  nosource: { label: "Ohne Paketquelle", test: (it) => !it.install_cmd },
+  note: { label: "Mit Notiz", test: (it, cat) => !!noteOf(cat, it) },
+  intel: { label: "Nur Intel", test: (it) => it.arch === "intel" },
+  unused: { label: "Lange nicht benutzt", test: (it) => it.last_used && daysSince(it.last_used) > 180 },
+};
+const LIST_SORTS = {
+  name: { label: "Name (A–Z)", cmp: (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) },
+  name_desc: { label: "Name (Z–A)", cmp: (a, b) => b.name.localeCompare(a.name, undefined, { sensitivity: "base" }) },
+  size: { label: "Größe", cmp: (a, b) => (b.size_bytes || 0) - (a.size_bytes || 0), needs: (it) => it.size_bytes },
+  last_used: { label: "Zuletzt benutzt", cmp: (a, b) => String(b.last_used || "").localeCompare(String(a.last_used || "")), needs: (it) => it.last_used },
+  source: { label: "Quelle", cmp: (a, b) => String(a.install_cmd || "~").localeCompare(String(b.install_cmd || "~")) || a.name.localeCompare(b.name), needs: (it) => it.install_cmd },
+};
+function listOpts(catId) {
+  let o = {};
+  try { o = JSON.parse(store.get("mi-list-" + catId, "{}")) || {}; } catch {}
+  return { sort: LIST_SORTS[o.sort] ? o.sort : "name", filter: LIST_FILTERS[o.filter] ? o.filter : "all", text: (state.listText || {})[catId] || "" };
+}
+function setListOpt(catId, key, value) {
+  const o = listOpts(catId);
+  o[key] = value;
+  store.set("mi-list-" + catId, JSON.stringify({ sort: o.sort, filter: o.filter }));
+}
+function filteredItems(cat) {
+  const o = listOpts(cat.id);
+  const f = LIST_FILTERS[o.filter];
+  let items = cat.items.filter((it) => f.test(it, cat));
+  if (o.text) items = items.filter((it) => match(it, o.text, cat));
+  return [...items].sort(LIST_SORTS[o.sort].cmp);
+}
+function listToolsHtml(cat) {
+  const o = listOpts(cat.id);
+  const filters = Object.entries(LIST_FILTERS)
+    .map(([key, f]) => [key, f, key === "all" ? cat.items.length : cat.items.filter((it) => f.test(it, cat)).length])
+    .filter(([key, , n]) => key === "all" || n > 0);
+  const sorts = Object.entries(LIST_SORTS).filter(([, s]) => !s.needs || cat.items.some(s.needs));
+  return `<div class="list-tools">
+    <div class="list-search">${svg("finder")}<input type="search" data-listq="${cat.id}" value="${esc(o.text)}" placeholder="${t("In Liste filtern")}" spellcheck="false"></div>
+    <div class="chips">${filters.length > 1 ? filters.map(([key, f, n]) =>
+      `<button class="chip${o.filter === key ? " on" : ""}" data-listfilter="${cat.id}|${key}">${t(f.label)} <span>${nf.format(n)}</span></button>`).join("") : ""}</div>
+    <select class="select" data-listsort="${cat.id}" title="${t("Sortieren")}">${sorts.map(([key, s]) =>
+      `<option value="${key}"${o.sort === key ? " selected" : ""}>${t(s.label)}</option>`).join("")}</select>
+  </div>`;
+}
+function listBodyHtml(cat) {
+  const items = filteredItems(cat);
+  const o = listOpts(cat.id);
+  return items.length ? itemsHtml(items, cat, o.text)
+    : `<div class="noresults"><b>${t("Keine Treffer")}</b>${t("Kein Eintrag passt zum Filter.")}</div>`;
 }
 const statCard = (icon, big, text, sub) => `<div class="card"><div class="ch"><span class="tile" style="${tileBg(icon)}">${svg(icon)}</span>${text}</div><div class="big">${big}</div>${sub ? `<div class="muted">${sub}</div>` : ""}</div>`;
 const pageHead = (icon, title, desc, extra = "") => `<div class="cat-head"><span class="tile" style="${tileBg(icon)}">${svg(icon)}</span>
@@ -514,7 +714,7 @@ function pageCategory(cat) {
   const bf = BREWFILE_CATS.has(cat.id) ? `<button class="btn" data-do="brewfile" title="${t("Homebrew, App Store und VS Code als Brewfile für brew bundle")}">${svg("brewfile")} Brewfile</button>` : "";
   return `<div class="page">
     ${pageHead(cat.id, esc(label(cat)), esc(t(DESC[cat.id] || cat.description || "")), bf)}
-    ${cat.items.length ? itemsHtml(cat.items, cat, "") : `<div class="noresults"><b>${t("Keine Einträge")}</b>${t("In dieser Kategorie wurde nichts gefunden.")}</div>`}
+    ${cat.items.length ? `${listToolsHtml(cat)}<div id="listBody">${listBodyHtml(cat)}</div>` : `<div class="noresults"><b>${t("Keine Einträge")}</b>${t("In dieser Kategorie wurde nichts gefunden.")}</div>`}
   </div>`;
 }
 function pageSearch(q) {
@@ -568,6 +768,7 @@ function buildScript(cmp, only) {
   const manual = [];
   for (const { cat, missing } of cmp.res) {
     for (const it of missing) {
+      if (!isPicked("compare", pickKey(cat, it), it)) continue;
       const c = it.install_cmd || "";
       let m;
       if ((m = c.match(/^brew install --cask (\S+)$/))) g.casks.add(m[1]);
@@ -635,12 +836,12 @@ function pageCompare() {
       <button class="btn primary" data-do="scan">${svg("scan")} ${t("Diesen Mac scannen")}</button></div></div></div>`;
   }
   const cmp = compareData();
+  // lists first: rendering them registers the checkboxes the summary counts
+  const lists = cmp.res.filter((r) => r.missing.length).map(({ cat, missing, deps }) =>
+    `<div class="group-title">${svg(cat.id, "i")} ${esc(label(cat))}<span class="n">${t("{n} fehlen", { n: missing.length })}${deps ? " · " + t("+{n} Abhängigkeiten kommen automatisch mit", { n: deps }) : ""}</span>${pickGroupButtons("compare", cat.id)}</div>${itemsHtml(missing, cat, "", { pick: { ctx: "compare", group: cat.id } })}`
+  ).join("");
   const scriptLines = buildScript(cmp);
   state.script = scriptLines;
-
-  const lists = cmp.res.filter((r) => r.missing.length).map(({ cat, missing, deps }) =>
-    `<div class="group-title">${svg(cat.id, "i")} ${esc(label(cat))}<span class="n">${t("{n} fehlen", { n: missing.length })}${deps ? " · " + t("+{n} Abhängigkeiten kommen automatisch mit", { n: deps }) : ""}</span></div>${itemsHtml(missing, cat, "")}`
-  ).join("");
 
   return `<div class="page">${head}
     <div class="ov-grid" style="margin-top:0">
@@ -650,7 +851,8 @@ function pageCompare() {
     </div>
     ${cmp.missingTotal ? `<div class="card script-card">
       <div class="ch"><span class="tile" style="${tileBg("script")}">${svg("script")}</span>${t("Installationsskript")}</div>
-      <div class="muted">${t("Installiert alles Fehlende per Homebrew, App Store, npm, pip, gem und VS Code. Vor dem Ausführen prüfen und Ungewünschtes löschen.")}</div>
+      <div class="muted">${t("Installiert die ausgewählten Einträge per Homebrew, App Store, npm, pip, gem und VS Code. Häkchen entfernen, was du nicht brauchst.")}</div>
+      ${pickSummary("compare")}
       <div class="btns" style="justify-content:flex-start;margin-top:6px">
         <button class="btn primary" data-do="savescript">${svg("script")} ${t("Skript sichern …")}</button>
         <button class="btn" data-do="copyscript">${svg("copy")} ${t("Kopieren")}</button>
@@ -687,7 +889,7 @@ const UPD_SOURCES = [
 ];
 
 function updateScript(items) {
-  const pick = (src, re) => items.filter((i) => i.source === src && !i.pinned)
+  const pick = (src, re) => items.filter((i) => i.source === src && isPicked("updates", `${i.source}:${i.name}`, i))
     .map((i) => (i.cmd || "").match(re)?.[1]).filter((x) => x && SAFE.test(x));
   const brew = pick("brew", /^brew upgrade (\S+)$/), casks = pick("cask", /^brew upgrade --cask (\S+)$/);
   const mas = pick("mas", /^mas upgrade (\d+)$/), npm = pick("npm", /^npm install -g (\S+)$/);
@@ -710,7 +912,8 @@ set -u
   return { text: out, count: brew.length + casks.length + mas.length + npm.length + pip.length + gem.length };
 }
 
-function updateRow(it, catId) {
+function updateRow(it, catId, pickable) {
+  const box = pickable && it.cmd ? pickBox("updates", it.source, `${it.source}:${it.name}`, it) : pickable ? `<span class="pick pick-none"></span>` : "";
   const icon = it.icon ? `<div class="ricon"><img loading="lazy" src="${esc(it.icon)}" alt=""></div>`
     : `<div class="ricon glyph" style="${tileBg(catId)}">${svg(catId)}</div>`;
   const pills = (it.dep ? `<span class="pill">${t("Abhängigkeit")}</span>` : "")
@@ -724,7 +927,7 @@ function updateRow(it, catId) {
   const ver = it.current ? `${esc(it.current)}<span class="ver-arrow">→</span><span class="ver-new">${esc(it.latest)}</span>`
     : t("{v} verfügbar", { v: `<span class="ver-new">${t("Version {v}", { v: esc(it.latest) })}</span>` });
   return `<div class="row">
-    ${icon}
+    ${box}${icon}
     <div class="rmain"><div class="rname">${esc(it.name)}${pills}</div>
       <div class="rsub">${ver}</div></div>
     ${cmd}${a ? `<div class="ractions">${a}</div>` : ""}
@@ -738,8 +941,6 @@ function pageUpdates() {
   if (!u.items.length) {
     return `<div class="page">${head}<div class="noresults"><b>${t("Alles aktuell")}</b>${t("Es wurden keine Updates gefunden.")}</div></div>`;
   }
-  const scr = updateScript(u.items);
-  state.updateScript = scr.text;
   const manual = u.items.filter((i) => !i.cmd).length;
   const groups = UPD_SOURCES.map(([src, title, catId]) => {
     const list = u.items.filter((i) => i.source === src);
@@ -747,20 +948,24 @@ function pageUpdates() {
     const hint = src === "macos" ? `<div class="hint">${t("Installation über Systemeinstellungen → Allgemein → Softwareupdate.")}</div>`
       : src === "app" ? `<div class="hint">${t("Nicht über Homebrew installiert – Version laut Homebrew-Katalog. Update in der App selbst (meist im Menü „Nach Updates suchen\") oder von der Website.")}</div>`
       : src === "brew" && list.some((i) => i.dep) ? `<div class="hint">${t("„Abhängigkeit\" = wurde automatisch mitinstalliert.")}</div>` : "";
-    return `<div class="group-title">${svg(catId, "i")} ${t(title)}<span class="n">${list.length}</span></div>${hint}<div class="group">${list.map((i) => updateRow(i, catId)).join("")}</div>`;
+    const scriptable = list.some((i) => i.cmd);
+    return `<div class="group-title">${svg(catId, "i")} ${t(title)}<span class="n">${list.length}</span>${scriptable ? pickGroupButtons("updates", src) : ""}</div>${hint}<div class="group">${list.map((i) => updateRow(i, catId, scriptable)).join("")}</div>`;
   }).join("");
+  const scr = updateScript(u.items);
+  state.updateScript = scr.text;
   return `<div class="page">${head}
     <div class="ov-grid" style="margin-top:0">
       ${statCard("updates", nf.format(u.items.length), t("Updates verfügbar"))}
       ${statCard("terminal", nf.format(scr.count), t("Per Skript aktualisierbar"))}
       ${statCard("apps", nf.format(manual), t("Manuell zu aktualisieren"))}
     </div>
-    ${scr.count ? `<div class="card script-card">
-      <div class="ch"><span class="tile" style="${tileBg("terminal")}">${svg("terminal")}</span>${t("Alle aktualisieren")}</div>
-      <div class="muted">${t("Aktualisiert alle {n} Pakete per Homebrew, App Store, npm, pip und gem in einem Terminal-Fenster.", { n: nf.format(scr.count) })}</div>
+    ${u.items.some((i) => i.cmd) ? `<div class="card script-card">
+      <div class="ch"><span class="tile" style="${tileBg("terminal")}">${svg("terminal")}</span>${t("Ausgewählte aktualisieren")}</div>
+      <div class="muted">${t("Aktualisiert die ausgewählten Pakete per Homebrew, App Store, npm, pip und gem in einem Terminal-Fenster.")}</div>
+      ${pickSummary("updates")}
       <div class="btns" style="justify-content:flex-start;margin-top:6px">
-        <button class="btn primary" data-do="runupdates">${svg("terminal")} ${t("Im Terminal ausführen")}</button>
-        <button class="btn" data-do="saveupdates">${svg("script")} ${t("Skript sichern …")}</button>
+        <button class="btn primary" data-do="runupdates"${scr.count ? "" : " disabled"}>${svg("terminal")} ${t("Im Terminal ausführen")}</button>
+        <button class="btn" data-do="saveupdates"${scr.count ? "" : " disabled"}>${svg("script")} ${t("Skript sichern …")}</button>
         <button class="btn" data-do="copyupdates">${svg("copy")} ${t("Kopieren")}</button>
       </div>
       <details><summary>${t("Vorschau")}</summary><pre>${esc(scr.text)}</pre></details>
@@ -1217,8 +1422,9 @@ function storageRow(r, max) {
   if (r.cmd) acts += `<button class="act" data-runcmd="${esc(r.id)}" title="${t("Im Terminal ausführen")}">${svg("terminal")}</button>`;
   const size = noAccess ? t("kein Zugriff") : r.bytes ? fmtBytes(r.bytes) : "–";
   const bar = `<div class="sizebar">${size}${r.bytes && max ? `<div class="bar ${r.safe ? "" : "warn"}"><span style="width:${Math.max(2, Math.round((r.bytes / max) * 100))}%"></span></div>` : ""}</div>`;
+  const box = r.cmd && r.bytes ? pickBox("storage", r.group, r.id, r) : `<span class="pick pick-none"></span>`;
   return `<div class="row">
-    <div class="ricon glyph" style="${tileBg(r.icon)}">${svg(r.icon)}</div>
+    ${box}<div class="ricon glyph" style="${tileBg(r.icon)}">${svg(r.icon)}</div>
     <div class="rmain"><div class="rname">${esc(t(r.label))}${r.safe ? `<span class="pill green">${t("sicher")}</span>` : r.cmd ? `<span class="pill orange">${t("prüfen")}</span>` : ""}</div>
       <div class="rsub" style="white-space:normal">${sub}</div>${r.cmd ? `<div class="rnote" style="font-style:normal;font-family:var(--mono)">${esc(r.cmd)}</div>` : ""}</div>
     ${bar}${acts ? `<div class="ractions">${acts}</div>` : ""}
@@ -1234,8 +1440,11 @@ function pageStorage() {
   const st = state.data.system?.storage;
   const group = (g, title) => {
     const l = rows.filter((r) => r.group === g).sort((a, b) => (b.bytes || 0) - (a.bytes || 0));
-    return l.length ? `<div class="group-title">${title}<span class="n">${fmtBytes(l.reduce((s, r) => s + (r.bytes || 0), 0))}</span></div><div class="group">${l.map((r) => storageRow(r, max)).join("")}</div>` : "";
+    return l.length ? `<div class="group-title">${title}<span class="n">${fmtBytes(l.reduce((s, r) => s + (r.bytes || 0), 0))}</span>${l.some((r) => r.cmd && r.bytes) ? pickGroupButtons("storage", g) : ""}</div><div class="group">${l.map((r) => storageRow(r, max)).join("")}</div>` : "";
   };
+  const groups = group("dev", t("Entwicklung")) + group("docker", "Docker") + group("system", t("Benutzerordner"));
+  const picked = rows.filter((r) => r.cmd && r.bytes && isPicked("storage", r.id, r));
+  const pickedBytes = picked.reduce((s, r) => s + r.bytes, 0);
   const top = state.data.storage.caches_top || [];
   return `<div class="page">${head}
     <div class="ov-grid" style="margin-top:0">
@@ -1243,12 +1452,11 @@ function pageStorage() {
       ${statCard("warn", fmtBytes(check) || "0 GB", t("Nach Prüfung freigebbar"), t("Simulatoren, Docker-Images, Volumes"))}
       ${st ? statCard("disk", `${nf.format(st.free_gb)} GB`, t("Frei auf {n}", { n: esc(st.name || "Macintosh HD") }), t("{u} GB von {t} GB belegt", { u: nf.format(st.used_gb), t: nf.format(st.total_gb) })) : ""}
     </div>
-    ${safe ? `<div class="card script-card"><div class="ch"><span class="tile" style="${tileBg("cleanup")}">${svg("cleanup")}</span>${t("Alle sicheren Caches aufräumen")}</div>
-      <div class="muted">${t("Führt alle grün markierten Befehle nacheinander im Terminal aus – nach einer Rückfrage. Frei werden etwa {s}.", { s: fmtBytes(safe) })}</div>
-      <div class="btns" style="justify-content:flex-start;margin-top:6px"><button class="btn primary" data-do="cleansafe">${svg("terminal")} ${t("Im Terminal ausführen")}</button></div></div>` : ""}
-    ${group("dev", t("Entwicklung"))}
-    ${group("docker", "Docker")}
-    ${group("system", t("Benutzerordner"))}
+    ${rows.some((r) => r.cmd && r.bytes) ? `<div class="card script-card"><div class="ch"><span class="tile" style="${tileBg("cleanup")}">${svg("cleanup")}</span>${t("Ausgewählte aufräumen")}</div>
+      <div class="muted">${t("Führt die Befehle der ausgewählten Einträge nacheinander im Terminal aus – nach einer Rückfrage. Sichere Caches sind vorausgewählt, alles mit „prüfen\" musst du bewusst anhaken.")}</div>
+      ${pickSummary("storage")}
+      <div class="btns" style="justify-content:flex-start;margin-top:6px"><button class="btn primary" data-do="cleanpicked"${picked.length ? "" : " disabled"}>${svg("terminal")} ${picked.length ? t("{s} freigeben", { s: fmtBytes(pickedBytes) }) : t("Nichts ausgewählt")}</button></div></div>` : ""}
+    ${groups}
     ${top.length ? `<div class="group-title">${t("Größte Programm-Caches")}<span class="n">~/Library/Caches</span></div>
       <div class="group">${top.map((c) => `<div class="row"><div class="ricon glyph" style="${tileBg("folder")}">${svg("folder")}</div>
         <div class="rmain"><div class="rname">${esc(c.name)}</div></div><div class="sizebar">${fmtBytes(c.bytes)}<div class="bar"><span style="width:${Math.max(2, Math.round((c.bytes / top[0].bytes) * 100))}%"></span></div></div></div>`).join("")}</div>` : ""}
@@ -1481,7 +1689,7 @@ function pageMigrate() {
       <div class="big">${t("{a} von {b} Schritten", { a: done, b: countable.length })}</div>
       <div class="bar"><span style="width:${pct}%"></span></div>
       <div class="btns" style="justify-content:flex-start;margin-top:6px"><button class="btn" data-do="scankeep">${svg("scan")} ${t("Diesen Mac neu prüfen")}</button></div>
-      <div class="muted">${t("Nach jedem Schritt neu prüfen – erledigte Schritte werden abgehakt.")}</div></div>
+      <div class="muted">${t("Nach jedem Schritt neu prüfen – erledigte Schritte werden abgehakt.")} ${t("Was installiert wird, legst du per Häkchen im Vergleich fest.")}</div></div>
     <div class="mig-list">${steps.map(card).join("")}</div>
   </div>`;
 }
@@ -1648,8 +1856,10 @@ async function changeSetting(key, value) {
 // ── Render ─────────────────────────────────────────────────────────
 function setTitle(title, sub) { $("title").textContent = title; $("subtitle").textContent = sub || ""; }
 
-function render() {
+function render(opts = {}) {
   const content = $("content");
+  const prevScroll = content.scrollTop;
+  state.pickRegistry = {};
   const hasData = !!state.data;
   $("exportBtn").disabled = !hasData || state.scanning;
   $("scanBtn").disabled = state.scanning;
@@ -1664,7 +1874,8 @@ function render() {
     setTitle(title, sub);
     seg.style.visibility = segVisible ? "" : "hidden";
     content.innerHTML = html;
-    content.scrollTop = 0;
+    content.scrollTop = opts.keepScroll ? prevScroll : 0;
+    refreshInspector();
   };
 
   if (state.sel === "settings" && !state.q) return show(t("Einstellungen"), "", pageSettings(), false);
@@ -1711,7 +1922,7 @@ function render() {
 }
 
 // ── Events ─────────────────────────────────────────────────────────
-function go(id) { state.sel = id; state.q = ""; $("q").value = ""; $("sbSearch").classList.remove("has-q"); store.set("mi-sel", id); document.body.classList.remove("sb-open"); render(); }
+function go(id) { closeInspector(); state.sel = id; state.q = ""; $("q").value = ""; $("sbSearch").classList.remove("has-q"); store.set("mi-sel", id); document.body.classList.remove("sb-open"); render(); }
 
 async function copyText(text, msg) {
   try { await navigator.clipboard.writeText(text || ""); toast(msg); }
@@ -1725,7 +1936,20 @@ document.addEventListener("click", async (e) => {
     const key = ch.parentElement.dataset.choice;
     return changeSetting(key, ch.dataset.value);
   }
-  const el = e.target.closest("[data-nav],[data-copy],[data-url],[data-reveal],[data-do],[data-settings],[data-path],[data-note],[data-runcmd],[data-openmac],[data-migrate]");
+  if (e.target.closest("label.pick")) return;   // handled by the change event
+  const pa = e.target.closest("[data-pickall]");
+  if (pa) {
+    const [ctx, group, on] = pa.dataset.pickall.split("|");
+    setPicked(ctx, pickEntries(ctx, group), on === "1");
+    return render({ keepScroll: true });
+  }
+  const lf = e.target.closest("[data-listfilter]");
+  if (lf) {
+    const [catId, key] = lf.dataset.listfilter.split("|");
+    setListOpt(catId, "filter", key);
+    return render({ keepScroll: true });
+  }
+  const el = e.target.closest("[data-nav],[data-copy],[data-url],[data-reveal],[data-do],[data-settings],[data-path],[data-note],[data-runcmd],[data-openmac],[data-migrate],[data-open]");
   if (!el) return;
   const d = el.dataset;
   if (d.nav) return go(d.nav);
@@ -1751,7 +1975,9 @@ document.addEventListener("click", async (e) => {
   }
   if (d.url) return window.inventory.openUrl(d.url);
   if (d.reveal) return window.inventory.reveal(d.reveal);
+  if (d.open) return state.inspect?.key === d.open ? closeInspector() : openInspector(d.open);
   switch (d.do) {
+    case "closeinspector": return closeInspector();
     case "scan": return startScan();
     case "cancelscan": return window.inventory.cancelScan();
     case "import": return window.inventory.import();
@@ -1774,9 +2000,9 @@ document.addEventListener("click", async (e) => {
     case "opendata": return window.inventory.openDataDir();
     case "scankeep": return startScan(true);
     case "csv": return window.inventory.exportCsv();
-    case "cleansafe": {
-      const cmds = (storageRows() || []).filter((r) => r.safe && r.bytes && r.cmd).map((r) => r.cmd);
-      return cmds.length ? runInTerminal("Alle sicheren Caches aufräumen", cmds.join(" ; ")) : null;
+    case "cleanpicked": {
+      const cmds = (storageRows() || []).filter((r) => r.cmd && r.bytes && isPicked("storage", r.id, r)).map((r) => r.cmd);
+      return cmds.length ? runInTerminal("Ausgewählte aufräumen", cmds.join(" ; ")) : null;
     }
     case "enablesync": return changeSetting("syncEnabled", true);
     case "choosesync": state.settings = await window.inventory.chooseSyncDir(); await loadMacs(); return render();
@@ -1797,10 +2023,27 @@ document.addEventListener("click", async (e) => {
   }
 });
 document.addEventListener("change", (e) => {
+  const pk = e.target.closest("input[data-pick]");
+  if (pk) {
+    const entry = pickEntries(pk.dataset.pick, "*").find((x) => x.key === pk.dataset.key);
+    if (entry) setPicked(pk.dataset.pick, [entry], pk.checked);
+    return render({ keepScroll: true });
+  }
+  const ls = e.target.closest("select[data-listsort]");
+  if (ls) { setListOpt(ls.dataset.listsort, "sort", ls.value); return render({ keepScroll: true }); }
   const tg = e.target.closest("input[data-set]");
   if (tg) return changeSetting(tg.dataset.set, tg.checked);
   const sel = e.target.closest("select[data-select]");
   if (sel) return changeSetting(sel.dataset.select, sel.dataset.select === "historyMax" ? Number(sel.value) : sel.value);
+});
+// Typing in a list filter only re-renders the list, so the input keeps focus
+document.addEventListener("input", (e) => {
+  const lq = e.target.closest("input[data-listq]");
+  if (!lq) return;
+  (state.listText ||= {})[lq.dataset.listq] = lq.value;
+  const cat = catById(lq.dataset.listq);
+  clearTimeout(render.lt);
+  render.lt = setTimeout(() => { if (cat && $("listBody")) $("listBody").innerHTML = listBodyHtml(cat); }, 80);
 });
 $("viewSeg").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-v]"); if (!b) return;
@@ -1824,6 +2067,7 @@ document.addEventListener("keydown", (e) => {
   if (mod && (e.key === "f" || e.key === "k")) { e.preventDefault(); $("q").focus(); $("q").select(); }
   if (mod && e.key === ",") { e.preventDefault(); go("settings"); }
   if (e.key === "Escape" && document.activeElement === $("q")) $("qClear").click();
+  else if (e.key === "Escape" && state.inspect && !document.querySelector(".sheet-bg")) closeInspector();
 });
 
 function startScan(keepSnapshot) {

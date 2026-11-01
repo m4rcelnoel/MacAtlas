@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Checkbox selection on Compare, Migration, Updates and Storage: the install, update and cleanup scripts only contain ticked entries. Each group has *All*/*None*, and the selection is remembered.
+- Detail panel: click any entry to see its update, install/update/uninstall commands with copy buttons, note and all known facts.
+- Lists can be filtered (with update, Homebrew, App Store, no package source, with note, Intel only, unused), sorted by name, size, last use or source, and searched within the list.
+
 ## 1.2.1
 
 - Settings → About shows the app icon, version and "Made by buddster" with links to buddster.de, the source code and GitHub issues; the macOS About panel credits buddster too.
