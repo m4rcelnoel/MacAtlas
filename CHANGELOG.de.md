@@ -2,6 +2,10 @@
 
 Deutsche Fassung von [CHANGELOG.md](CHANGELOG.md) – wird in MacAtlas unter Einstellungen → *Was ist neu* angezeigt.
 
+## 1.3.1
+
+- Erstes veröffentlichtes Release der Änderungen aus 1.3.0 (der 1.3.0-Build wurde durch einen fehlgeschlagenen UI-Test gestoppt und nie veröffentlicht).
+
 ## 1.3.0
 
 - Auswahl per Häkchen in Vergleich, Umzug, Updates und Speicherplatz: Installations-, Update- und Aufräumskripte enthalten nur angehakte Einträge. Jede Gruppe hat *Alle*/*Keine*, die Auswahl wird gemerkt.
