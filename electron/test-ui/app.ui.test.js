@@ -137,8 +137,10 @@ test("main window: sidebar, quick open, lists, selection", async (t) => {
       await page.waitForSelector("#changelogSheet .cl-sec");
       assert.ok(await page.locator("#changelogSheet .cl-sec").count() >= 3);
       assert.match(await page.locator("#changelogSheet").innerText(), /1\.2\.1/);
-      // German UI → German changelog; unreleased changes are labelled as already included
-      assert.match(await page.locator("#changelogSheet").innerText(), /Schon enthalten[\s\S]*Auswahl per Häkchen/);
+      // German UI → German changelog
+      assert.match(await page.locator("#changelogSheet").innerText(), /Auswahl per Häkchen/);
+      // Unreleased changes are labelled as already included (independent of the current file)
+      assert.match(await page.evaluate(() => changelogHtml("## Unreleased\n- x\n## 1.0.0\n- y", null)), /Schon enthalten/);
       await page.click('[data-cl="close"]');
       assert.equal(await page.locator("#changelogSheet").count(), 0);
     });
