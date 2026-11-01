@@ -394,9 +394,12 @@ def parse_updates(apps):
         add("pip", n, p.get("version", ""), p.get("latest_version", ""), cmd=f"pip3 install -U {n}",
             url=f"https://pypi.org/project/{urllib.parse.quote(n)}/")
 
+    system_gems = 0
     for line in read_lines("gem_outdated.txt"):
         m = re.match(r"^(\S+)\s+\((\S+)\s+<\s+(\S+)\)", line)
-        if m:
+        if m and system_ruby():
+            system_gems += 1   # macOS' own Ruby: not ours to update
+        elif m:
             add("gem", m.group(1), m.group(2), m.group(3), cmd=f"gem update {m.group(1)}",
                 url=f"https://rubygems.org/gems/{urllib.parse.quote(m.group(1))}")
 
@@ -412,7 +415,7 @@ def parse_updates(apps):
                 icon=a.get("icon"), auto=meta.get("auto_updates", False), cask=cask)
 
     items.sort(key=lambda x: (x["source"], x["name"].lower()))
-    return {"checked_at": checked, "items": items}
+    return {"checked_at": checked, "items": items, "system_gems_skipped": system_gems}
 
 
 def parse_brew_formulae():
@@ -616,8 +619,16 @@ def parse_npm():
     return out
 
 
+def system_ruby():
+    """True when `gem` belongs to the Ruby that ships with macOS – its gems need sudo and
+    shouldn't be changed, so they get no install or update commands."""
+    d = (read_lines("gem_dir.txt") or [""])[0]
+    return d.startswith("/Library/Ruby/") or d.startswith("/System/")
+
+
 def parse_gems():
     out = []
+    system = system_ruby()
     for line in read_lines("ruby_gems.txt"):
         m = re.match(r"^(\S+)\s*\(([^)]+)\)", line)
         if m:
@@ -627,8 +638,9 @@ def parse_gems():
         out.append({
             "name": name,
             "version": ver,
-            "install_cmd": f"gem install {name}",
+            "install_cmd": None if system else f"gem install {name}",
             "install_url": f"https://rubygems.org/gems/{urllib.parse.quote(name)}",
+            **({"install_desc": "Teil des macOS-System-Ruby"} if system else {}),
         })
     return out
 

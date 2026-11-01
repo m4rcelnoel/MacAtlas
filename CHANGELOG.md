@@ -14,6 +14,7 @@
 - New package sources: Rust (`cargo install`), Go tools, pipx, uv tools, Composer, mise, asdf and MacPorts – including the install script for a new Mac.
 - MacAtlas updates itself: a daily check of GitHub Releases, then download, signature check, replace and restart from Settings.
 - Test button for notifications in Settings.
+- Gems of the Ruby that ships with macOS are no longer offered as updates or put into install scripts (they need root and belong to the system); permission errors get an explanation.
 - New app and menu bar icon.
 - UI tests with Playwright in CI; releases can update a Homebrew tap automatically.
 

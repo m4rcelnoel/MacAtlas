@@ -1059,6 +1059,7 @@ function pageUpdates() {
       <details><summary>${t("Vorschau")}</summary><pre>${esc(scr.text)}</pre></details>
     </div>` : ""}
     ${groups}
+    ${u.system_gems_skipped ? `<div class="foot-note">${pl(u.system_gems_skipped, "{n} Gem des Ruby von macOS wird nicht angeboten – es gehört zum System und braucht Root-Rechte.", "{n} Gems des Ruby von macOS werden nicht angeboten – sie gehören zum System und brauchen Root-Rechte.")}</div>` : ""}
   </div>`;
 }
 
@@ -1592,6 +1593,7 @@ function runTask(title, script, opts = {}) {
     const HINTS = {
       mas: "Im App Store anmelden und dann noch einmal versuchen.",
       sudo: "Ohne Administrator-Passwort konnten einige Pakete nicht installiert werden.",
+      perm: "Keine Schreibrechte – meist beim Ruby oder Python von macOS. Diese Pakete gehören zum System und sollten nicht aktualisiert werden.",
     };
     const extra = [...T.hints].map((h) => `<div class="task-hint">${svg("info")} ${t(HINTS[h])}</div>`).join("")
       + (T.errors.length ? `<details class="task-errors"><summary>${pl(T.errors.length, "Ein Fehler", "{n} Fehler")}</summary>${T.errors.slice(0, 50).map((x) => `<div>${esc(x)}</div>`).join("")}</details>` : "")
@@ -1717,7 +1719,7 @@ function pageStorage() {
     ${top.length ? `<div class="group-title">${t("Größte Programm-Caches")}<span class="n">~/Library/Caches</span></div>
       <div class="group">${top.map((c) => `<div class="row"><div class="ricon glyph" style="${tileBg("folder")}">${svg("folder")}</div>
         <div class="rmain"><div class="rname">${esc(c.name)}</div></div><div class="sizebar">${fmtBytes(c.bytes)}<div class="bar"><span style="width:${Math.max(2, Math.round((c.bytes / top[0].bytes) * 100))}%"></span></div></div></div>`).join("")}</div>` : ""}
-    <div class="foot-note">${t("MacAtlas löscht nie selbst etwas. Befehle laufen nur nach deiner Bestätigung im Terminal.")}</div>
+    <div class="foot-note">${t("MacAtlas löscht nie selbst etwas. Befehle laufen nur nach deiner Bestätigung.")}</div>
   </div>`;
 }
 function storageCmd(id) { return (storageRows() || []).find((r) => r.id === id); }

@@ -444,6 +444,9 @@ body.dropping .drop-hint { display: grid; }
 .pal-foot { display: flex; gap: 16px; padding: 8px 16px; border-top: 1px solid var(--group-border); font-size: 11.5px; color: var(--secondary); }
 kbd { font: 11px -apple-system, sans-serif; border: 1px solid var(--group-border); border-radius: 4px; padding: 0 4px; margin-right: 2px; background: var(--group); }
 .sheet.task { width: min(680px, calc(100vw - 32px)); }
+.sheet.task .sheet-head .ricon.glyph { display: grid; place-items: center; border-radius: 9px; }
+.sheet.task .sheet-head .ricon.glyph svg { width: 20px; height: 20px; color: #fff; stroke-width: 1.8; }
+.task-preview summary:focus:not(:focus-visible), .task-errors summary:focus:not(:focus-visible) { outline: none; }
 .task-note { margin: 0; color: var(--secondary); font-size: 12.5px; line-height: 1.45; }
 .task-preview summary, .task-errors summary { cursor: default; color: var(--accent); font-size: 12px; margin-top: 8px; }
 .task-preview pre { max-height: 180px; overflow: auto; margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--group); border: 1px solid var(--group-border); font: 11px/1.45 var(--mono); user-select: text; }

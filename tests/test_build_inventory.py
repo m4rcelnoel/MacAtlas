@@ -159,6 +159,18 @@ class BuildInventoryTest(unittest.TestCase):
         self.assertEqual(cmd("macports"), {"ripgrep": "sudo port install ripgrep", "wget": "sudo port install wget"})
         self.assertEqual({i["name"]: i["version"] for i in self.cats["macports"]["items"]}, {"ripgrep": "14.1.0", "wget": "1.25.0"})
 
+    def test_system_ruby_gems_are_left_alone(self):
+        marker = self.work / "data" / "gem_dir.txt"
+        marker.write_text("/Library/Ruby/Gems/2.6.0\n")
+        try:
+            upd = self.mod.parse_updates(self.mod.APPS)
+            self.assertNotIn("gem", {i["source"] for i in upd["items"]})
+            self.assertEqual(upd["system_gems_skipped"], 1)
+            self.assertIsNone(self.mod.parse_gems()[0]["install_cmd"])
+        finally:
+            marker.unlink()
+        self.assertEqual(self.mod.parse_gems()[0]["install_cmd"], "gem install bundler")
+
     def test_formula_leaves(self):
         leaf = {f["name"]: f.get("leaf") for f in self.cats["brew_formulae"]["items"]}
         self.assertEqual(leaf, {"git": True, "node": True, "openssl@3": False, "openssl@4": False})

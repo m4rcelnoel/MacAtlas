@@ -243,7 +243,6 @@ const I18N_EN = {
   "Frei auf {n}": "Free on {n}", "Alle sicheren Caches aufräumen": "Clean all safe caches",
   "Führt alle grün markierten Befehle nacheinander im Terminal aus – nach einer Rückfrage. Frei werden etwa {s}.": "Runs all commands marked green one after another in Terminal – after asking. Frees about {s}.",
   "Benutzerordner": "Home folder", "Größte Programm-Caches": "Largest app caches",
-  "MacAtlas löscht nie selbst etwas. Befehle laufen nur nach deiner Bestätigung im Terminal.": "MacAtlas never deletes anything itself. Commands only run in Terminal after you confirm.",
   "Xcode: Zwischendaten (DerivedData)": "Xcode: build data (DerivedData)", "Wird beim nächsten Build automatisch neu erzeugt.": "Recreated automatically on the next build.",
   "iOS-Simulatoren": "iOS simulators",
   "Der Befehl entfernt nur nicht mehr verfügbare Simulatoren. Alle zurücksetzen (Apps und Daten darin gehen verloren): xcrun simctl erase all": "The command only removes unavailable simulators. To reset all (apps and data inside are lost): xcrun simctl erase all",
@@ -425,4 +424,9 @@ const I18N_EN = {
   "Es läuft bereits eine Aufgabe": "Another task is already running", "Ein Fehler": "1 error", "{n} Fehler": "{n} errors",
   "Im App Store anmelden und dann noch einmal versuchen.": "Sign in to the App Store, then try again.",
   "Ohne Administrator-Passwort konnten einige Pakete nicht installiert werden.": "Some packages couldn't be installed without the administrator password.",
+  "{n} Gem des Ruby von macOS wird nicht angeboten – es gehört zum System und braucht Root-Rechte.": "{n} gem of macOS' own Ruby is not offered – it belongs to the system and needs root rights.",
+  "{n} Gems des Ruby von macOS werden nicht angeboten – sie gehören zum System und brauchen Root-Rechte.": "{n} gems of macOS' own Ruby are not offered – they belong to the system and need root rights.",
+  "Keine Schreibrechte – meist beim Ruby oder Python von macOS. Diese Pakete gehören zum System und sollten nicht aktualisiert werden.": "No write permission – usually macOS' own Ruby or Python. Those packages belong to the system and shouldn't be updated.",
+  "Teil des macOS-System-Ruby": "Part of macOS' system Ruby",
+  "MacAtlas löscht nie selbst etwas. Befehle laufen nur nach deiner Bestätigung.": "MacAtlas never deletes anything on its own. Commands only run after you confirm.",
 };

@@ -89,6 +89,8 @@ npm list -g --depth=0 2>/dev/null | tail -n +2 | grep -v '^$' > data/npm_global.
 pip3 list 2>/dev/null > data/pip_packages.txt || true
 found pip data/pip_packages.txt . 2
 gem list --local 2>/dev/null > data/ruby_gems.txt || true
+# Where gems go: /Library/Ruby/… = the Ruby that ships with macOS (read-only without sudo)
+gem env gemdir 2>/dev/null > data/gem_dir.txt || : > data/gem_dir.txt
 found npm data/npm_global.txt
 found gem data/ruby_gems.txt
 

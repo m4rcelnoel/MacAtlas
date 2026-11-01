@@ -198,6 +198,9 @@ function classifyLine(line) {
   if ((m = line.match(/^==> (?:▸ (.+)|Installed (.+))$/))) return { step: m[1] || m[2] };
   if (/not signed in|sign in to the App Store/i.test(line)) return { hint: "mas", error: line };
   if (/^sudo: .*(password|askpass)/i.test(line)) return { hint: "sudo", error: line };
+  if (/FilePermissionError|Permission denied|EACCES|You don't have write permissions/.test(line)) {
+    return /^(Error|ERROR|error)[:\s]|^npm (ERR!|error) /.test(line) ? { hint: "perm", error: line } : { hint: "perm" };
+  }
   if (/^(Error|ERROR|error)[:\s]|^npm (ERR!|error) |^fatal: |^E: /.test(line)) return { error: line };
   return null;
 }

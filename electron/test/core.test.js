@@ -179,6 +179,9 @@ test("classifyLine finds steps, errors and known problems", () => {
   assert.equal(core.classifyLine("npm error code EACCES").error, "npm error code EACCES");
   assert.equal(core.classifyLine("Warning: mas is not signed in").hint, "mas");
   assert.equal(core.classifyLine("sudo: a password is required").hint, "sudo");
+  assert.deepEqual(core.classifyLine("ERROR:  While executing gem ... (Gem::FilePermissionError)"),
+    { hint: "perm", error: "ERROR:  While executing gem ... (Gem::FilePermissionError)" });
+  assert.deepEqual(core.classifyLine("    You don't have write permissions for the /Library/Ruby/Gems/2.6.0 directory."), { hint: "perm" });
   assert.equal(core.classifyLine("Pouring aom--3.15.3.arm64_tahoe.bottle.tar.gz"), null);
   assert.deepEqual(core.classifyLine("==> ▸ Xcode: Zwischendaten"), { step: "Xcode: Zwischendaten" });
   assert.deepEqual(core.classifyLine("==> Installed Xcode"), { step: "Xcode" });
