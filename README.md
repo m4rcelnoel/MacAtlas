@@ -38,8 +38,8 @@ Setting up a new Mac, cleaning up an old one or just answering *"what did I inst
 
 <img src="docs/images/updates.png" width="100%" alt="Updates">
 
-- **Updates** – outdated Homebrew packages, App Store apps, npm/pip/gems, pending macOS updates and apps installed outside Homebrew (checked against the Homebrew catalog). Tick what you want and *Update Selected* runs one script in Terminal (pinned packages start unticked).
-- **Storage** – Xcode DerivedData, simulators, device support files, Docker build cache, Homebrew/npm/pip/Gradle/CocoaPods caches and more, each with its size and the command to clean it. Safe caches start ticked and the selection is cleaned in one go – MacAtlas never deletes anything itself, every command runs in Terminal after you confirm.
+- **Updates** – outdated Homebrew packages, App Store apps, npm/pip/gems, pending macOS updates and apps installed outside Homebrew (checked against the Homebrew catalog). Tick what you want and *Update Selected* runs it right inside MacAtlas – live output, progress, a summary of errors and a rescan afterwards (pinned packages start unticked). *In Terminal* is still available.
+- **Storage** – Xcode DerivedData, simulators, device support files, Docker build cache, Homebrew/npm/pip/Gradle/CocoaPods caches and more, each with its size and the command to clean it. Safe caches start ticked and the selection is cleaned in one go – MacAtlas only runs these fixed commands after you confirm, never deletes anything on its own.
 - **Versions & duplicates** – runtimes installed several times (Python, Node, Ruby, Java…) and which one actually runs, Homebrew packages in several versions, duplicate apps, orphaned dependencies.
 - **Security** – FileVault, firewall, SIP, Gatekeeper, screen lock, automatic updates, open network ports (reachable from outside vs. local only), system and browser extensions.
 - **Clean up** – size, last use, architecture (Intel-only apps) and code signature of every app.
@@ -150,7 +150,7 @@ App data lives in `~/Library/Application Support/MacAtlas/` (`scan/`, `history/`
 ### Security notes
 - The renderer is sandboxed with context isolation, a strict CSP (no inline scripts) and blocked navigation.
 - Imported snapshots are treated as untrusted: only plain package tokens make it into generated scripts and Brewfiles, CSV cells can't become formulas, and every value is HTML-escaped.
-- Cleanup and update commands are fixed strings defined in the app and always run in a visible Terminal window after confirmation.
+- Cleanup and update commands are fixed strings defined in the app and only run after confirmation – inside the app with visible output, or in Terminal. When a command needs `sudo`, macOS shows its own password dialog (`SUDO_ASKPASS`); the password goes straight to `sudo` and never passes through MacAtlas.
 
 ### CI/CD
 

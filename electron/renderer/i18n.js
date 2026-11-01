@@ -116,8 +116,7 @@ const I18N_EN = {
   "Updates verfügbar": "Updates available", "Per Skript aktualisierbar": "Updatable by script", "Manuell zu aktualisieren": "Update manually",
   "Alle aktualisieren": "Update All",
   "Aktualisiert alle {n} Pakete per Homebrew, App Store, npm, pip und gem in einem Terminal-Fenster.": "Updates all {n} packages via Homebrew, App Store, npm, pip and gem in a Terminal window.",
-  "Im Terminal ausführen": "Run in Terminal", "Update-Skript kopiert": "Update script copied",
-  "Updates laufen im Terminal – danach neu scannen (⌘R)": "Updates are running in Terminal – scan again afterwards (⌘R)",
+  "Update-Skript kopiert": "Update script copied",
   "Terminal konnte nicht geöffnet werden": "Couldn't open Terminal", "Skript gesichert": "Script saved",
 
   // cleanup
@@ -234,7 +233,7 @@ const I18N_EN = {
   "{n} Datei": "{n} file", "{n} Dateien": "{n} files", "{n} Mac": "{n} Mac", "{n} Macs": "{n} Macs",
 
   // terminal helper
-  "Ausführen? [j/N] ": "Run? [y/N] ", "Abgebrochen.": "Cancelled.", "Läuft im Terminal – dort bestätigen": "Running in Terminal – confirm there",
+  "Ausführen? [j/N] ": "Run? [y/N] ", "Abgebrochen.": "Cancelled.",
 
   // storage
   "kein Zugriff": "no access", "sicher": "safe", "prüfen": "review",
@@ -315,7 +314,6 @@ const I18N_EN = {
   "Programme von Hand installieren": "Install apps manually", "Für diese Programme gibt es keine Paketquelle.": "There's no package source for these apps.",
   "Einstellungen übernehmen": "Transfer settings",
   "Auf dem alten Mac unter „Einstellungen mitnehmen\" ein Paket sichern, hier „Wiederherstellen.command\" doppelklicken.": "On the old Mac, save a package under “Take Settings Along”; here, double-click “Wiederherstellen.command”.",
-  "Läuft im Terminal – danach „Diesen Mac neu prüfen\"": "Running in Terminal – then “Check This Mac Again”",
 
   // dotfiles
   "Einstellungspaket": "Settings package",
@@ -417,4 +415,14 @@ const I18N_EN = {
   "Erscheint nichts, MacAtlas in den Systemeinstellungen unter „Mitteilungen\" erlauben.": "If nothing appears, allow MacAtlas in System Settings → Notifications.",
   "Test senden": "Send Test", "Systemeinstellungen …": "System Settings …", "Test-Mitteilung gesendet": "Test notification sent",
   "Mitteilungen werden auf diesem Mac nicht unterstützt": "Notifications are not supported on this Mac",
+  // running scripts inside the app (v1.3)
+  "Läuft direkt in MacAtlas, ohne Terminal-Fenster. Falls nötig, fragt macOS nach deinem Administrator-Passwort – MacAtlas sieht es nicht.":
+    "Runs right inside MacAtlas, without a Terminal window. If needed, macOS asks for your administrator password – MacAtlas never sees it.",
+  "Befehle anzeigen": "Show commands", "Ausführen …": "Run …", "Im Terminal": "In Terminal", "Ausführen": "Run", "{a} von {b} erledigt": "{a} of {b} done",
+  "Läuft …": "Running …", "Abgebrochen": "Cancelled", "Fertig": "Done", "Fertig mit Fehlern": "Done with errors",
+  "Fehlgeschlagen (Code {c})": "Failed (code {c})", "MacAtlas scannt jetzt neu, damit die Listen stimmen.": "MacAtlas is rescanning so the lists are up to date.",
+  "Ausgabe kopieren": "Copy Output", "Ausgabe kopiert": "Output copied", "Läuft im Terminal": "Running in Terminal",
+  "Es läuft bereits eine Aufgabe": "Another task is already running", "Ein Fehler": "1 error", "{n} Fehler": "{n} errors",
+  "Im App Store anmelden und dann noch einmal versuchen.": "Sign in to the App Store, then try again.",
+  "Ohne Administrator-Passwort konnten einige Pakete nicht installiert werden.": "Some packages couldn't be installed without the administrator password.",
 };

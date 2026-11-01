@@ -114,5 +114,30 @@ test("main window: sidebar, quick open, lists, selection", async (t) => {
       assert.match(await script(), /typescript@latest/);
       assert.match(await page.locator(".pick-summary").innerText(), /1 von 2/);
     });
+
+    await t.test("scripts run inside the app with live output and a summary", async () => {
+      // A harmless script instead of real updates
+      await page.evaluate(() => runTask("Ausgewählte aktualisieren",
+        '#!/usr/bin/env bash\necho "==> Upgrading demo"\nprintf "10%%\\r100%%\\n"\necho "==> Upgrading other"\necho "Error: other failed" >&2\nexit 0\n',
+        { total: 2 }));
+      await page.click('[data-task="run"]');
+      await page.waitForSelector('[data-task="copylog"]');
+      const log = await page.locator("#taskLog").innerText();
+      assert.match(log, /==> Upgrading demo\n100%\n==> Upgrading other\nError: other failed/);
+      assert.equal(await page.locator("#taskSub").innerText(), "Fertig mit Fehlern");
+      assert.equal(await page.locator("#taskLog .err").count(), 1);
+      await page.click('[data-task="close"]');
+      assert.equal(await page.locator("#taskSheet").count(), 0);
+    });
+
+    await t.test("a running task can be cancelled", async () => {
+      await page.evaluate(() => runTask("Test", '#!/usr/bin/env bash\necho "==> ▸ waiting"\nsleep 30\n', { total: 1 }));
+      await page.click('[data-task="run"]');
+      await page.waitForSelector("#taskLog .head");
+      await page.click('[data-task="cancel"]');
+      await page.waitForSelector('[data-task="copylog"]');
+      assert.equal(await page.locator("#taskSub").innerText(), "Abgebrochen");
+      await page.click('[data-task="close"]');
+    });
   } finally { await close(ctx); }
 });

@@ -163,3 +163,23 @@ test("releaseInfo only accepts the DMG from this repository", () => {
   assert.equal(core.releaseInfo(rel(ok, { draft: true })), null);
   assert.equal(core.releaseInfo({ tag_name: "v1.3.0", assets: [] }), null);
 });
+
+test("splitOutput strips colours and keeps the last state of progress bars", () => {
+  const r = core.splitOutput("\x1b[34m==>\x1b[0m \x1b[1mUpgrading aom\x1b[0m\n###   10%\r######  60%\r######## 100%\nDownloading par");
+  assert.deepEqual(r.lines, ["==> Upgrading aom", "######## 100%"]);
+  assert.equal(r.rest, "Downloading par");
+  assert.deepEqual(core.splitOutput("\n\n").lines, []);
+});
+
+test("classifyLine finds steps, errors and known problems", () => {
+  assert.deepEqual(core.classifyLine("==> Upgrading aom"), { step: "aom" });
+  assert.equal(core.classifyLine("==> Upgrading 29 outdated packages:"), null);
+  assert.deepEqual(core.classifyLine("Successfully installed requests-2.33.1"), { step: "requests-2.33.1" });
+  assert.deepEqual(core.classifyLine("Error: openssl@3: no bottle available"), { error: "Error: openssl@3: no bottle available" });
+  assert.equal(core.classifyLine("npm error code EACCES").error, "npm error code EACCES");
+  assert.equal(core.classifyLine("Warning: mas is not signed in").hint, "mas");
+  assert.equal(core.classifyLine("sudo: a password is required").hint, "sudo");
+  assert.equal(core.classifyLine("Pouring aom--3.15.3.arm64_tahoe.bottle.tar.gz"), null);
+  assert.deepEqual(core.classifyLine("==> ▸ Xcode: Zwischendaten"), { step: "Xcode: Zwischendaten" });
+  assert.deepEqual(core.classifyLine("==> Installed Xcode"), { step: "Xcode" });
+});

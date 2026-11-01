@@ -443,6 +443,21 @@ body.dropping .drop-hint { display: grid; }
 .pal-empty { padding: 22px; text-align: center; color: var(--secondary); }
 .pal-foot { display: flex; gap: 16px; padding: 8px 16px; border-top: 1px solid var(--group-border); font-size: 11.5px; color: var(--secondary); }
 kbd { font: 11px -apple-system, sans-serif; border: 1px solid var(--group-border); border-radius: 4px; padding: 0 4px; margin-right: 2px; background: var(--group); }
+.sheet.task { width: min(680px, calc(100vw - 32px)); }
+.task-note { margin: 0; color: var(--secondary); font-size: 12.5px; line-height: 1.45; }
+.task-preview summary, .task-errors summary { cursor: default; color: var(--accent); font-size: 12px; margin-top: 8px; }
+.task-preview pre { max-height: 180px; overflow: auto; margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--group); border: 1px solid var(--group-border); font: 11px/1.45 var(--mono); user-select: text; }
+.task-progress { width: 100%; margin: 2px 0 6px; }
+.task-progress span.indet { width: 30% !important; animation: indet 1.2s ease-in-out infinite; }
+.task-progress span.bad { background: #ff9f0a; }
+@keyframes indet { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+.task-meta { display: flex; justify-content: flex-end; font-size: 11.5px; color: #ff453a; min-height: 14px; }
+.task-log { height: 300px; overflow: auto; padding: 8px 10px; border-radius: 8px; background: #1c1c1e; color: #e5e5ea; font: 11px/1.5 var(--mono); user-select: text; white-space: pre-wrap; word-break: break-all; }
+.task-log .head { color: #64d2ff; font-weight: 600; }
+.task-log .err { color: #ff6961; }
+.task-hint { display: flex; gap: 8px; align-items: center; font-size: 12px; margin-top: 8px; color: var(--secondary); }
+.task-hint svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--accent); }
+.task-errors div { font: 11px/1.45 var(--mono); color: #ff453a; padding: 2px 0; user-select: text; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 .sheet-foot .btn.danger { margin-right: auto; color: #ff453a; }
 .noresults { text-align: center; color: var(--secondary); padding: 60px 20px; }

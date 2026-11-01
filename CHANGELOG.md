@@ -5,6 +5,7 @@
 - Checkbox selection on Compare, Migration, Updates and Storage: the install, update and cleanup scripts only contain ticked entries. Each group has *All*/*None*, and the selection is remembered.
 - Detail panel: click any entry to see its update, install/update/uninstall commands with copy buttons, note and all known facts.
 - Lists can be filtered (with update, Homebrew, App Store, no package source, with note, Intel only, unused), sorted by name, size, last use or source, and searched within the list.
+- Updates, cleanups and migration steps run inside MacAtlas instead of a Terminal window: live output, progress, cancel, an error summary and an automatic rescan. sudo uses the macOS password dialog. *In Terminal* remains as an option.
 - Quick Open (⌘K): jump to any page, entry or action.
 - Sidebar sections can be collapsed; ↑/↓ moves through lists (the detail panel follows) and the sidebar; better VoiceOver labels and visible focus.
 - First launch shows a short three-step introduction and warns when the Command Line Tools are missing.

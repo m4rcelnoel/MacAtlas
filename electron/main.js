@@ -70,6 +70,7 @@ const STRINGS = {
     notifyOne: "1 neues Update gefunden – insgesamt {n}.", notifyMany: "{m} neue Updates gefunden – insgesamt {n}.",
     nothingToExport: "Noch nichts zu exportieren. Scanne zuerst deinen Mac.", exportTitle: "MacAtlas-Daten exportieren",
     exported: "Exportiert nach {p}", importTitle: "MacAtlas-Daten importieren", snapLoaded: "Snapshot von {h} geladen",
+    askpass: "MacAtlas braucht dein Administrator-Passwort, um die ausgewählten Pakete zu installieren.",
     notifyTest: "So sehen Mitteilungen von MacAtlas aus. Ein Klick öffnet die Einstellungen.",
     updAvailable: "MacAtlas {v} ist verfügbar.", updFailed: "Update fehlgeschlagen", updWrongSigner: "Das Update ist nicht vom MacAtlas-Entwickler signiert.",
     unknown: "unbekannt", importFailed: "Import fehlgeschlagen", invalidFile: "Datei ist kein gültiges MacAtlas-JSON.",
@@ -104,6 +105,7 @@ const STRINGS = {
     notifyOne: "1 new update found – {n} in total.", notifyMany: "{m} new updates found – {n} in total.",
     nothingToExport: "Nothing to export yet. Scan your Mac first.", exportTitle: "Export MacAtlas",
     exported: "Exported to {p}", importTitle: "Import MacAtlas", snapLoaded: "Loaded snapshot from {h}",
+    askpass: "MacAtlas needs your administrator password to install the selected packages.",
     notifyTest: "This is how MacAtlas notifications look. Click to open Settings.",
     updAvailable: "MacAtlas {v} is available.", updFailed: "Update failed", updWrongSigner: "The update is not signed by the MacAtlas developer.",
     unknown: "unknown", importFailed: "Import failed", invalidFile: "This file is not a valid MacAtlas JSON.",
@@ -318,6 +320,16 @@ function getLoginPath() {
   return loginPath;
 }
 
+// Environment for scans and in-app tasks: the login shell's PATH plus the usual tool locations
+function toolEnv() {
+  const env = { ...process.env };
+  env.PATH = [
+    getLoginPath(), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+    env.PATH || "",
+  ].filter(Boolean).join(":");
+  return env;
+}
+
 let scanning = false, scanChild = null, scanCancelled = false;
 const totalSteps = (() => {
   try { return (fs.readFileSync(scanScript, "utf8").match(/^echo "→/gm) || []).length; } catch { return 12; }
@@ -330,14 +342,10 @@ function runScan(opts = {}) {
   updateTray();
   send("scan:started", { total: totalSteps });
   const env = {
-    ...process.env, MI_WORKDIR: workDir,
+    ...toolEnv(), MI_WORKDIR: workDir,
     MI_EMBED_ICONS: settings.embedIcons ? "1" : "0",
     MI_BREW_UPDATE: settings.brewUpdate ? "1" : "0",
   };
-  env.PATH = [
-    getLoginPath(), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin",
-    env.PATH || "",
-  ].filter(Boolean).join(":");
   // Own process group, so cancelling also stops brew/pip/gem started by the script
   const child = spawn("/bin/bash", [scanScript], { cwd: workDir, env, detached: true });
   scanChild = child;
@@ -685,6 +693,59 @@ ipcMain.handle("script:run", async (_e, { content, name }) => {
   fs.chmodSync(file, 0o755);
   const err = await shell.openPath(file);
   return !err;
+});
+
+// ── In-app tasks ────────────────────────────────────────────────────
+// Runs a generated update/cleanup/install script without a Terminal window and streams the
+// output to the UI. sudo asks with the macOS password dialog (SUDO_ASKPASS); the password goes
+// from that dialog straight to sudo and never passes through MacAtlas.
+let task = null;   // { id, child, cancelled }
+function taskHelpers(dir) {
+  const askpass = path.join(dir, "askpass.sh");
+  fs.writeFileSync(askpass, `#!/bin/bash
+/usr/bin/osascript -e 'text returned of (display dialog "${tr("askpass").replace(/["'\\]/g, "")}" default answer "" with hidden answer with title "MacAtlas" with icon caution)'
+`, { mode: 0o700 });
+  // Our own scripts call plain "sudo"; route it through the dialog as well
+  const bin = path.join(dir, "bin");
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, "sudo"), '#!/bin/bash\nexec /usr/bin/sudo -A "$@"\n', { mode: 0o700 });
+  return { askpass, bin };
+}
+ipcMain.handle("task:run", (_e, { content, title }) => {
+  if (task || typeof content !== "string" || !content.startsWith("#!/usr/bin/env bash")) return null;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "macatlas-task-"));
+  const file = path.join(dir, "task.sh");
+  fs.writeFileSync(file, content, { mode: 0o700 });
+  const { askpass, bin } = taskHelpers(dir);
+  const env = { ...toolEnv(), SUDO_ASKPASS: askpass, NONINTERACTIVE: "1", HOMEBREW_NO_ENV_HINTS: "1", HOMEBREW_COLOR: "0", NO_COLOR: "1", TERM: "dumb" };
+  env.PATH = `${bin}:${env.PATH}`;
+  const id = Date.now();
+  // stdin closed: anything that waits for input fails instead of hanging
+  const child = spawn("/bin/bash", [file], { cwd: os.homedir(), env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  task = { id, child, cancelled: false };
+  let buf = "";
+  const flush = (final) => {
+    const { lines, rest } = core.splitOutput(final ? buf + "\n" : buf);
+    buf = final ? "" : rest;
+    if (lines.length) send("task:output", { id, lines: lines.map((l) => ({ text: l, ...(core.classifyLine(l) || {}) })) });
+  };
+  const onData = (c) => { buf += c.toString(); flush(false); };
+  child.stdout.on("data", onData);
+  child.stderr.on("data", onData);
+  child.on("close", (code, signal) => {
+    flush(true);
+    const cancelled = task && task.cancelled;
+    task = null;
+    fs.rmSync(dir, { recursive: true, force: true });
+    send("task:done", { id, code, cancelled: !!cancelled || signal === "SIGTERM" });
+  });
+  return { id, title: String(title || "") };
+});
+ipcMain.handle("task:cancel", () => {
+  if (!task) return false;
+  task.cancelled = true;
+  try { process.kill(-task.child.pid, "SIGTERM"); } catch { try { task.child.kill("SIGTERM"); } catch {} }
+  return true;
 });
 
 // ── Inventory files ───────────────────────────────────────────────────
@@ -1222,7 +1283,10 @@ app.whenReady().then(() => {
   app.on("activate", () => showWindow());
 });
 
-app.on("before-quit", () => cancelScan());
+app.on("before-quit", () => {
+  cancelScan();
+  if (task) try { process.kill(-task.child.pid, "SIGTERM"); } catch {}
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();

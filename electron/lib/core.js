@@ -178,7 +178,32 @@ function releaseInfo(rel) {
   };
 }
 
+// ── Running scripts inside the app ──────────────────────────────────
+const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Z0-9]|[\x00-\x08\x0b\x0c\x0e-\x1f]/g;
+/**
+ * Turns raw terminal output into plain lines. Progress bars redraw a line with "\r",
+ * so only the text after the last "\r" counts. Returns complete lines and the unfinished rest.
+ */
+function splitOutput(buffer) {
+  const parts = String(buffer).split("\n");
+  const rest = parts.pop();
+  const clean = (l) => l.split("\r").filter((x) => x.trim()).pop()?.replace(ANSI, "").trimEnd() ?? "";
+  return { lines: parts.map(clean).filter((l) => l !== ""), rest };
+}
+/** Recognises progress, errors and known problems in package manager output. */
+function classifyLine(line) {
+  let m;
+  if ((m = line.match(/^==> (?:Upgrading|Installing|Reinstalling) ([A-Za-z@][\w@.+-]*)$/))) return { step: m[1] };
+  if ((m = line.match(/^Successfully installed (.+)$/))) return { step: m[1].split(" ")[0] };
+  if ((m = line.match(/^==> (?:▸ (.+)|Installed (.+))$/))) return { step: m[1] || m[2] };
+  if (/not signed in|sign in to the App Store/i.test(line)) return { hint: "mas", error: line };
+  if (/^sudo: .*(password|askpass)/i.test(line)) return { hint: "sudo", error: line };
+  if (/^(Error|ERROR|error)[:\s]|^npm (ERR!|error) |^fatal: |^E: /.test(line)) return { error: line };
+  return null;
+}
+
 module.exports = {
   SAFE_TOKEN, SAFE_STORAGE, REDACTED, safeHost, nextRenewal, isoDate, storageReclaimable, compactInventory,
   significantChanges, buildBrewfile, buildCsv, redact, parseAppUrl, compareVersions, releaseInfo,
+  splitOutput, classifyLine,
 };

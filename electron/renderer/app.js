@@ -1,4 +1,16 @@
 // ── Browser fallback (dev preview only) ────────────────────────────
+// Fake task output so the run sheet can be tried in the browser preview
+async function devTask(id) {
+  devTask.cancel = false;
+  const say = (text, extra = {}) => devTask.out({ id, lines: [{ text, ...extra }] });
+  for (const n of ["aom", "ca-certificates", "cocoapods", "composer"]) {
+    if (devTask.cancel) return devTask.done({ id, code: null, cancelled: true });
+    say(`==> Upgrading ${n}`, { step: n }); say("######################################## 100.0%");
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  say("Error: freerdp: no bottle available", { error: "Error: freerdp: no bottle available" });
+  devTask.done({ id, code: 0, cancelled: false });
+}
 if (!window.inventory) {
   document.body.classList.add("browser");
   const noop = () => {};
@@ -21,6 +33,8 @@ if (!window.inventory) {
       } catch { return { data: null, source: "own" }; }
     },
     saveScript: async () => true, runScript: async () => true,
+    runTask: async () => { const id = Date.now(); setTimeout(() => devTask(id), 50); return { id }; }, cancelTask: async () => { devTask.cancel = true; return true; },
+    onTaskOutput: (cb) => { devTask.out = cb; }, onTaskDone: (cb) => { devTask.done = cb; },
     exportBrewfile: async () => true, openSettings: async () => true, revealPath: async () => true,
     notes: async () => { try { return JSON.parse(localStorage.getItem("mi-dev-notes") || "{}"); } catch { return {}; } },
     setNote: async (k, v) => { const n = JSON.parse(localStorage.getItem("mi-dev-notes") || "{}"); if (!v.note && !v.tags.length) delete n[k]; else n[k] = { ...v, updated: new Date().toISOString() }; localStorage.setItem("mi-dev-notes", JSON.stringify(n)); return true; },
@@ -1026,6 +1040,7 @@ function pageUpdates() {
   }).join("");
   const scr = updateScript(u.items);
   state.updateScript = scr.text;
+  state.updateCount = scr.count;
   return `<div class="page">${head}
     <div class="ov-grid" style="margin-top:0">
       ${statCard("updates", nf.format(u.items.length), t("Updates verfügbar"))}
@@ -1037,7 +1052,7 @@ function pageUpdates() {
       <div class="muted">${t("Aktualisiert die ausgewählten Pakete per Homebrew, App Store, npm, pip und gem in einem Terminal-Fenster.")}</div>
       ${pickSummary("updates")}
       <div class="btns" style="justify-content:flex-start;margin-top:6px">
-        <button class="btn primary" data-do="runupdates"${scr.count ? "" : " disabled"}>${svg("terminal")} ${t("Im Terminal ausführen")}</button>
+        <button class="btn primary" data-do="runupdates"${scr.count ? "" : " disabled"}>${svg("terminal")} ${t("Ausführen …")}</button>
         <button class="btn" data-do="saveupdates"${scr.count ? "" : " disabled"}>${svg("script")} ${t("Skript sichern …")}</button>
         <button class="btn" data-do="copyupdates">${svg("copy")} ${t("Kopieren")}</button>
       </div>
@@ -1508,10 +1523,111 @@ echo ""
 echo "${t("Fertig. Danach in MacAtlas neu scannen (⌘R).")}"
 `;
 }
-async function runInTerminal(title, cmd) {
-  const ok = await window.inventory.runScript(confirmScript(title, cmd), "MacAtlas.command");
-  toast(ok ? t("Läuft im Terminal – dort bestätigen") : t("Terminal konnte nicht geöffnet werden"), 4000);
+
+// ── Running scripts inside MacAtlas ────────────────────────────────
+// A sheet asks first, then shows live output, progress and a summary. "In Terminal" stays as
+// an alternative for people who want to watch (or type) in a real terminal.
+// opts: { total: expected steps, terminal: script for Terminal, file: its name, rescan: true | "keep" }
+const plainScript = (title, cmds) => `#!/usr/bin/env bash
+# MacAtlas – ${t(title)}
+set -u
+${cmds.map(([label, cmd]) => `echo "==> ${String(label).replace(/["`$\\]/g, "")}"\n${cmd}`).join("\n")}
+`;
+function runTask(title, script, opts = {}) {
+  if ($("taskSheet")) return;
+  const bg = document.createElement("div");
+  bg.className = "sheet-bg"; bg.id = "taskSheet";
+  bg.innerHTML = `<div class="sheet task" role="dialog" aria-label="${esc(t(title))}">
+    <div class="sheet-head"><div class="ricon glyph" style="${tileBg("terminal")}">${svg("terminal")}</div>
+      <div><b>${esc(t(title))}</b><span id="taskSub">${opts.total ? esc(pl(opts.total, "{n} Eintrag", "{n} Einträge")) : ""}</span></div></div>
+    <div id="taskBody">
+      <p class="task-note">${t("Läuft direkt in MacAtlas, ohne Terminal-Fenster. Falls nötig, fragt macOS nach deinem Administrator-Passwort – MacAtlas sieht es nicht.")}</p>
+      <details class="task-preview"><summary>${t("Befehle anzeigen")}</summary><pre>${esc(script)}</pre></details>
+    </div>
+    <div class="sheet-foot" id="taskFoot">
+      ${opts.terminal ? `<button class="btn" data-task="terminal">${svg("terminal")} ${t("Im Terminal")}</button>` : ""}
+      <span style="flex:1"></span>
+      <button class="btn" data-task="close">${t("Abbrechen")}</button>
+      <button class="btn primary" data-task="run">${t("Ausführen")}</button>
+    </div></div>`;
+  document.body.appendChild(bg);
+  const T = { lines: [], steps: new Set(), errors: [], hints: new Set(), id: null, running: false };
+  state.task = T;
+  const body = bg.querySelector("#taskBody"), foot = bg.querySelector("#taskFoot");
+  const close = () => { if (T.running) return; bg.remove(); document.removeEventListener("keydown", onKey, true); state.task = null; };
+  const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+  document.addEventListener("keydown", onKey, true);
+  const progress = () => {
+    const pct = opts.total ? Math.min(100, Math.round((T.steps.size / opts.total) * 100)) : null;
+    bg.querySelector("#taskBar").style.width = (pct ?? 100) + "%";
+    bg.querySelector("#taskBar").classList.toggle("indet", pct == null && T.running);
+    bg.querySelector("#taskSub").textContent = opts.total ? t("{a} von {b} erledigt", { a: Math.min(T.steps.size, opts.total), b: opts.total }) : t("Läuft …");
+    bg.querySelector("#taskErr").textContent = T.errors.length ? pl(T.errors.length, "Ein Fehler", "{n} Fehler") : "";
+  };
+  T.onOutput = (lines) => {
+    const log = bg.querySelector("#taskLog");
+    const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
+    for (const l of lines) {
+      T.lines.push(l.text);
+      if (l.step) T.steps.add(l.step);
+      if (l.error) T.errors.push(l.text);
+      if (l.hint) T.hints.add(l.hint);
+      const div = document.createElement("div");
+      div.textContent = l.text;
+      if (l.error) div.className = "err"; else if (l.step || /^==> /.test(l.text)) div.className = "head";
+      log.appendChild(div);
+    }
+    while (log.childElementCount > 3000) log.firstChild.remove();
+    if (stick) log.scrollTop = log.scrollHeight;
+    progress();
+  };
+  T.onDone = ({ code, cancelled }) => {
+    T.running = false;
+    const ok = !cancelled && code === 0 && !T.errors.length;
+    const status = cancelled ? t("Abgebrochen") : ok ? t("Fertig") : code === 0 ? t("Fertig mit Fehlern") : t("Fehlgeschlagen (Code {c})", { c: code });
+    bg.querySelector("#taskSub").textContent = status;
+    bg.querySelector("#taskBar").classList.remove("indet");
+    bg.querySelector("#taskBar").style.width = "100%";
+    bg.querySelector("#taskBar").classList.toggle("bad", !ok);
+    const HINTS = {
+      mas: "Im App Store anmelden und dann noch einmal versuchen.",
+      sudo: "Ohne Administrator-Passwort konnten einige Pakete nicht installiert werden.",
+    };
+    const extra = [...T.hints].map((h) => `<div class="task-hint">${svg("info")} ${t(HINTS[h])}</div>`).join("")
+      + (T.errors.length ? `<details class="task-errors"><summary>${pl(T.errors.length, "Ein Fehler", "{n} Fehler")}</summary>${T.errors.slice(0, 50).map((x) => `<div>${esc(x)}</div>`).join("")}</details>` : "")
+      + (opts.rescan && !cancelled ? `<div class="task-hint">${svg("scan")} ${t("MacAtlas scannt jetzt neu, damit die Listen stimmen.")}</div>` : "");
+    bg.querySelector("#taskSummary").innerHTML = extra;
+    foot.innerHTML = `<button class="btn" data-task="copylog">${svg("copy")} ${t("Ausgabe kopieren")}</button><span style="flex:1"></span>
+      <button class="btn primary" data-task="close">${t("Schließen")}</button>`;
+    toast(status);
+    if (opts.rescan && !cancelled) startScan(opts.rescan === "keep");
+  };
+  bg.addEventListener("click", async (e) => {
+    const act = e.target.closest("[data-task]")?.dataset.task;
+    if (e.target === bg) return close();
+    if (act === "close") return close();
+    if (act === "copylog") return copyText(T.lines.join("\n"), t("Ausgabe kopiert"));
+    if (act === "cancel") return window.inventory.cancelTask();
+    if (act === "terminal") {
+      const ok = await window.inventory.runScript(opts.terminal, opts.file || "MacAtlas.command");
+      close();
+      return toast(ok ? t("Läuft im Terminal") : t("Terminal konnte nicht geöffnet werden"), 3500);
+    }
+    if (act === "run") {
+      body.innerHTML = `<div class="progress task-progress"><span id="taskBar" class="indet"></span></div>
+        <div class="task-meta"><span id="taskErr"></span></div>
+        <div class="task-log" id="taskLog" role="log" aria-live="off"></div><div id="taskSummary"></div>`;
+      foot.innerHTML = `<span style="flex:1"></span><button class="btn" data-task="cancel">${t("Abbrechen")}</button>`;
+      T.running = true;
+      progress();
+      const r = await window.inventory.runTask(script, title);
+      if (!r) { T.running = false; close(); return toast(t("Es läuft bereits eine Aufgabe")); }
+      T.id = r.id;
+    }
+  });
 }
+window.inventory.onTaskOutput(({ id, lines }) => { if (state.task && (state.task.id === id || state.task.id == null)) state.task.onOutput(lines); });
+window.inventory.onTaskDone((p) => { if (state.task && state.task.running) state.task.onDone(p); });
 
 // ── Storage ────────────────────────────────────────────────────────
 // Commands are fixed strings defined here (never taken from scan data).
@@ -1560,7 +1676,7 @@ function storageRow(r, max) {
   const sub = [r.path, t(r.hint)].filter(Boolean).map(esc).join(" · ");
   let acts = "";
   if (r.cmd) acts += `<button class="act" data-copy="${esc(r.cmd)}" title="${t("Befehl kopieren")}" aria-label="${t("Befehl kopieren")}">${svg("copy")}</button>`;
-  if (r.cmd) acts += `<button class="act" data-runcmd="${esc(r.id)}" title="${t("Im Terminal ausführen")}" aria-label="${t("Im Terminal ausführen")}">${svg("terminal")}</button>`;
+  if (r.cmd) acts += `<button class="act" data-runcmd="${esc(r.id)}" title="${t("Ausführen …")}" aria-label="${t("Ausführen …")}">${svg("terminal")}</button>`;
   const size = noAccess ? t("kein Zugriff") : r.bytes ? fmtBytes(r.bytes) : "–";
   const bar = `<div class="sizebar">${size}${r.bytes && max ? `<div class="bar ${r.safe ? "" : "warn"}"><span style="width:${Math.max(2, Math.round((r.bytes / max) * 100))}%"></span></div>` : ""}</div>`;
   const box = r.cmd && r.bytes ? pickBox("storage", r.group, r.id, r) : `<span class="pick pick-none"></span>`;
@@ -1819,8 +1935,8 @@ function pageMigrate() {
   const card = (x, i) => {
     const status = x.open == null ? `<span class="pill">${t("Info")}</span>` : x.open === 0 ? `<span class="pill green">✓ ${t("erledigt")}</span>` : `<span class="pill orange">${t("{n} offen", { n: x.open })}</span>`;
     let btn = "";
-    if (x.open && x.script) btn = `<button class="btn primary" data-migrate="${x.id}">${svg("terminal")} ${t("Im Terminal ausführen")}</button>`;
-    if (x.open && x.run) btn = `<button class="btn primary" data-migrate="${x.id}">${svg("terminal")} ${t("Im Terminal ausführen")}</button>` + (x.link ? ` <button class="btn" data-url="${x.link}">${svg("link")} brew.sh</button>` : "");
+    if (x.open && x.script) btn = `<button class="btn primary" data-migrate="${x.id}">${svg("terminal")} ${t("Ausführen …")}</button>`;
+    if (x.open && x.run) btn = `<button class="btn primary" data-migrate="${x.id}">${svg("terminal")} ${t("Ausführen …")}</button>` + (x.link ? ` <button class="btn" data-url="${x.link}">${svg("link")} brew.sh</button>` : "");
     const manual = x.manual?.length ? `<div class="group" style="margin-top:8px">${x.manual.map((it) => `<div class="row" style="min-height:38px"><div class="rmain"><div class="rname">${esc(it.name)}</div></div>${it.install_url ? `<div class="ractions" style="opacity:1"><button class="act" data-url="${esc(it.install_url)}" title="${t("Website öffnen")}" aria-label="${t("Website öffnen")}">${svg("link")}</button></div>` : ""}</div>`).join("")}</div>` : "";
     return `<div class="card mig-step${x.open === 0 ? " done" : ""}"><div class="ch"><span class="mig-num">${i + 1}</span><span class="tile" style="${tileBg(x.icon)}">${svg(x.icon)}</span>${t(x.title)} ${status}</div>
       <div class="muted">${t(x.desc)}</div>${btn ? `<div class="btns" style="justify-content:flex-start;margin-top:6px">${btn}</div>` : ""}${manual}</div>`;
@@ -2123,13 +2239,17 @@ document.addEventListener("click", async (e) => {
   if (d.settings) return window.inventory.openSettings(d.settings);
   if (d.path) return window.inventory.revealPath(d.path);
   if (d.note) return openNoteSheet(d.note);
-  if (d.runcmd) { const r = storageCmd(d.runcmd); return r && r.cmd ? runInTerminal(r.label, r.cmd) : null; }
+  if (d.runcmd) {
+    const r = storageCmd(d.runcmd);
+    return r && r.cmd ? runTask(r.label, plainScript(r.label, [[`▸ ${t(r.label)}`, r.cmd]]), { total: 1, terminal: confirmScript(r.label, r.cmd), rescan: true }) : null;
+  }
   if (d.openmac) return window.inventory.openMac(d.openmac);
   if (d.migrate) {
+    const step = migrationSteps().find((x) => x.id === d.migrate);
     const scr = migrationScript(d.migrate);
-    if (!scr) return;
-    const ok = await window.inventory.runScript(scr, "MacAtlas Umzug.command");
-    return toast(ok ? t("Läuft im Terminal – danach „Diesen Mac neu prüfen\"") : t("Terminal konnte nicht geöffnet werden"), 4500);
+    if (!step || !scr) return;
+    const inApp = step.run ? plainScript(step.title, [[`▸ ${t(step.title)}`, step.run]]) : scr;
+    return runTask(step.title, inApp, { total: step.open || 1, terminal: scr, file: "MacAtlas Umzug.command", rescan: "keep" });
   }
   if (d.copy) {
     try {
@@ -2164,16 +2284,14 @@ document.addEventListener("click", async (e) => {
     }
     case "testnotify":
       return toast((await window.inventory.testNotification()) ? t("Test-Mitteilung gesendet") : t("Mitteilungen werden auf diesem Mac nicht unterstützt"), 3500);
-    case "installclt": return runInTerminal("Command Line Tools installieren", "xcode-select --install");
+    case "installclt": return runTask("Command Line Tools installieren", plainScript("Command Line Tools installieren", [["▸ xcode-select --install", "xcode-select --install"]]), { total: 1, terminal: confirmScript("Command Line Tools installieren", "xcode-select --install") });
     case "import": return window.inventory.import();
     case "brewfile": return window.inventory.exportBrewfile();
     case "report": return saveReport();
     case "copyscript": return copyText(state.script, t("Installationsskript kopiert"));
     case "copyupdates": return copyText(state.updateScript, t("Update-Skript kopiert"));
-    case "runupdates": {
-      const ok = await window.inventory.runScript(state.updateScript || "", "MacAtlas Updates.command");
-      return toast(ok ? t("Updates laufen im Terminal – danach neu scannen (⌘R)") : t("Terminal konnte nicht geöffnet werden"), 4500);
-    }
+    case "runupdates":
+      return runTask("Ausgewählte aktualisieren", state.updateScript || "", { total: state.updateCount, terminal: state.updateScript, file: "MacAtlas Updates.command", rescan: true });
     case "saveupdates":
       if (await window.inventory.saveScript(state.updateScript || "", "MacAtlas Updates.command")) toast(t("Skript gesichert"));
       return;
@@ -2186,8 +2304,10 @@ document.addEventListener("click", async (e) => {
     case "scankeep": return startScan(true);
     case "csv": return window.inventory.exportCsv();
     case "cleanpicked": {
-      const cmds = (storageRows() || []).filter((r) => r.cmd && r.bytes && isPicked("storage", r.id, r)).map((r) => r.cmd);
-      return cmds.length ? runInTerminal("Ausgewählte aufräumen", cmds.join(" ; ")) : null;
+      const rows = (storageRows() || []).filter((r) => r.cmd && r.bytes && isPicked("storage", r.id, r));
+      if (!rows.length) return null;
+      return runTask("Ausgewählte aufräumen", plainScript("Ausgewählte aufräumen", rows.map((r) => [`▸ ${t(r.label)}`, r.cmd])),
+        { total: rows.length, terminal: confirmScript("Ausgewählte aufräumen", rows.map((r) => r.cmd).join(" ; ")), rescan: true });
     }
     case "enablesync": return changeSetting("syncEnabled", true);
     case "choosesync": state.settings = await window.inventory.chooseSyncDir(); await loadMacs(); return render();
