@@ -1056,7 +1056,7 @@ function pageUpdates() {
     </div>
     ${u.items.some((i) => i.cmd) ? `<div class="card script-card">
       <div class="ch"><span class="tile" style="${tileBg("terminal")}">${svg("terminal")}</span>${t("Ausgewählte aktualisieren")}</div>
-      <div class="muted">${t("Aktualisiert die ausgewählten Pakete per Homebrew, App Store, npm, pip und gem in einem Terminal-Fenster.")}</div>
+      <div class="muted">${t("Aktualisiert die ausgewählten Pakete per Homebrew, App Store, npm, pip und gem – direkt in MacAtlas mit Live-Ausgabe.")}</div>
       ${pickSummary("updates")}
       <div class="btns" style="justify-content:flex-start;margin-top:6px">
         <button class="btn primary" data-do="runupdates"${scr.count ? "" : " disabled"}>${svg("terminal")} ${t("Ausführen …")}</button>
@@ -1762,7 +1762,7 @@ function pageStorage() {
       ${st ? statCard("disk", `${nf.format(st.free_gb)} GB`, t("Frei auf {n}", { n: esc(st.name || "Macintosh HD") }), t("{u} GB von {t} GB belegt", { u: nf.format(st.used_gb), t: nf.format(st.total_gb) })) : ""}
     </div>
     ${rows.some((r) => r.cmd && r.bytes) ? `<div class="card script-card"><div class="ch"><span class="tile" style="${tileBg("cleanup")}">${svg("cleanup")}</span>${t("Ausgewählte aufräumen")}</div>
-      <div class="muted">${t("Führt die Befehle der ausgewählten Einträge nacheinander im Terminal aus – nach einer Rückfrage. Sichere Caches sind vorausgewählt, alles mit „prüfen\" musst du bewusst anhaken.")}</div>
+      <div class="muted">${t("Führt die Befehle der ausgewählten Einträge nacheinander aus – nach einer Rückfrage, direkt in MacAtlas. Sichere Caches sind vorausgewählt, alles mit „prüfen\" musst du bewusst anhaken.")}</div>
       ${pickSummary("storage")}
       <div class="btns" style="justify-content:flex-start;margin-top:6px"><button class="btn primary" data-do="cleanpicked"${picked.length ? "" : " disabled"}>${svg("terminal")} ${picked.length ? t("{s} freigeben", { s: fmtBytes(pickedBytes) }) : t("Nichts ausgewählt")}</button></div></div>` : ""}
     ${groups}

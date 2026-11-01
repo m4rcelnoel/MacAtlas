@@ -2,6 +2,12 @@
 
 Deutsche Fassung von [CHANGELOG.md](CHANGELOG.md) – wird in MacAtlas unter Einstellungen → *Was ist neu* angezeigt.
 
+## Unreleased
+
+- Die Texte auf den Seiten Updates und Speicherplatz sagen nicht mehr, dass die Befehle im Terminal laufen.
+- Behoben: Symbole von Seiten und Ordnern in der Schnellsuche und in Dialogen waren nicht zentriert.
+- README: neue Screenshots (Updates in der App, System-Tag, Schnellsuche).
+
 ## 1.3.1
 
 - Erstes veröffentlichtes Release der Änderungen aus 1.3.0 (der 1.3.0-Build wurde durch einen fehlgeschlagenen UI-Test gestoppt und nie veröffentlicht).

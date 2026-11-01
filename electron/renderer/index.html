@@ -294,6 +294,10 @@ body.inactive .nav-item.sel .cnt { color: var(--secondary); }
 .row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 7px 10px 7px 12px; position: relative; }
 .row + .row { border-top: 1px solid var(--sep); }
 .row:hover { background: var(--fill); }
+/* Base for every icon tile (palette, sheets, settings); rows and the inspector size it below */
+.ricon { display: grid; place-items: center; flex: 0 0 auto; border-radius: 7px; }
+.ricon.glyph { color: #fff; }
+.ricon.glyph svg { width: 58%; height: 58%; stroke-width: 2; }
 .row .ricon { width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; }
 .row .ricon img { width: 32px; height: 32px; object-fit: contain; }
 .row .ricon.glyph { color: #fff; }

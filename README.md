@@ -35,11 +35,18 @@ Setting up a new Mac, cleaning up an old one or just answering *"what did I inst
 - Packages that ship with macOS or Ruby (system Ruby gems, Ruby's default gems, the Command Line Tools' Python packages) are tagged *System*: listed, but never updated, installed or treated as missing.
 - Hardware: model, chip, cores, memory, storage, battery health, displays, uptime.
 
+<p align="center">
+  <img src="docs/images/quick-open.png" width="49%" alt="Quick Open (⌘K)">
+  <img src="docs/images/system.png" width="49%" alt="Ruby gems with the System tag and list filters">
+</p>
+
 ### Maintenance
 
 <img src="docs/images/updates.png" width="100%" alt="Updates">
 
 - **Updates** – outdated Homebrew packages, App Store apps, npm/pip/gems, pending macOS updates and apps installed outside Homebrew (checked against the Homebrew catalog). Tick what you want and *Update Selected* runs it right inside MacAtlas – live output, progress, a summary of errors and a rescan afterwards (pinned packages start unticked). *In Terminal* is still available.
+<img src="docs/images/run.png" width="100%" alt="Updates running inside MacAtlas">
+
 - **Storage** – Xcode DerivedData, simulators, device support files, Docker build cache, Homebrew/npm/pip/Gradle/CocoaPods caches and more, each with its size and the command to clean it. Safe caches start ticked and the selection is cleaned in one go – MacAtlas only runs these fixed commands after you confirm, never deletes anything on its own.
 - **Versions & duplicates** – runtimes installed several times (Python, Node, Ruby, Java…) and which one actually runs, Homebrew packages in several versions, duplicate apps, orphaned dependencies.
 - **Security** – FileVault, firewall, SIP, Gatekeeper, screen lock, automatic updates, open network ports (reachable from outside vs. local only), system and browser extensions.
@@ -58,7 +65,7 @@ Setting up a new Mac, cleaning up an old one or just answering *"what did I inst
 
 ### Moving to a new Mac
 - **Export / import** a scan (JSON – or just drop the file onto the window) and **compare** two Macs: what's missing here, as an install script or a `Brewfile`. Untick anything you don't want; the migration assistant uses the same selection.
-- **Migration assistant** – step by step: Homebrew, Homebrew apps, App Store, developer packages, VS Code, manual downloads. *Check this Mac again* ticks off what's done.
+- **Migration assistant** – step by step: Homebrew, Homebrew apps, App Store, developer packages, VS Code, manual downloads. Each step runs inside MacAtlas with live output; *Check this Mac again* ticks off what's done.
 - **Take settings along** – a ZIP with your shell, Git, SSH config (never keys), VS Code/Cursor settings and Dock/Finder/screenshot/trackpad preferences, plus a restore script. Values that look like passwords or tokens are replaced automatically.
 - **My Macs** – optionally share every scan through an iCloud Drive folder and see all your Macs side by side.
 
@@ -83,7 +90,7 @@ open "macatlas://scan"
 
 <img src="docs/images/settings.png" width="100%" alt="Settings">
 
-**Settings** (⌘,): language (System/German/English), appearance (Auto/Light/Dark), open at login, menu bar, scheduled scans, notifications (with a test button), sharing with other Macs, history length, MacAtlas updates, reset.
+**Settings** (⌘,): language (System/German/English), appearance (Auto/Light/Dark), open at login, menu bar, scheduled scans, notifications (with a test button), sharing with other Macs, history length, MacAtlas updates, *What's New* (the changelog in English or German), reset.
 
 ## Install
 
@@ -140,7 +147,7 @@ scan.sh  ──raw text/JSON──▶  build_inventory.py  ──inventory.json�
 | `electron/scripts/scan.sh` | Collects raw data with standard macOS/Homebrew tools into `$MI_WORKDIR/data` |
 | `electron/scripts/build_inventory.py` | Turns it into `inventory.json` (runs on the system Python 3.9) |
 | `electron/main.js` | Electron main process: window, menus, menu bar, scans, exports, sharing, URL scheme, notifications |
-| `electron/lib/core.js` | Pure, unit-tested helpers (Brewfile, CSV, secret redaction, history, renewals) |
+| `electron/lib/core.js` | Pure, unit-tested helpers (Brewfile, CSV, secret redaction, history, renewals, version checks, task output parsing) |
 | `electron/preload.js` | Minimal IPC bridge for the sandboxed renderer |
 | `electron/renderer/` | UI (`index.html`, `app.js`) and English translations (`i18n.js`, keys are the German source strings) |
 | `electron/test/`, `electron/test-ui/`, `tests/` | JavaScript, UI (Playwright) and Python tests |
@@ -150,6 +157,7 @@ App data lives in `~/Library/Application Support/MacAtlas/` (`scan/`, `history/`
 
 ### Security notes
 - The renderer is sandboxed with context isolation, a strict CSP (no inline scripts) and blocked navigation.
+- The self-updater only accepts the `MacAtlas.dmg` asset of this repository's releases and installs it only if it is notarized and signed with the same Developer ID team.
 - Imported snapshots are treated as untrusted: only plain package tokens make it into generated scripts and Brewfiles, CSV cells can't become formulas, and every value is HTML-escaped.
 - Cleanup and update commands are fixed strings defined in the app and only run after confirmation – inside the app with visible output, or in Terminal. When a command needs `sudo`, macOS shows its own password dialog (`SUDO_ASKPASS`); the password goes straight to `sudo` and never passes through MacAtlas.
 

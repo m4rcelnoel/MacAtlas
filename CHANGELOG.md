@@ -2,6 +2,12 @@
 
 German version: [CHANGELOG.de.md](CHANGELOG.de.md) – shown in MacAtlas under Settings → *What's New*.
 
+## Unreleased
+
+- Texts on the Updates and Storage pages no longer say the commands run in Terminal.
+- Fix: icons of pages and folders in Quick Open and in dialogs were not centred.
+- README: new screenshots (running updates inside the app, the System tag, Quick Open).
+
 ## 1.3.1
 
 - First published release of the 1.3 changes below (the 1.3.0 build was stopped by a failing UI test and never released).

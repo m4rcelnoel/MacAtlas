@@ -358,10 +358,9 @@ const I18N_EN = {
   "Installiert die ausgewählten Einträge per Homebrew, App Store, npm, pip, gem und VS Code. Häkchen entfernen, was du nicht brauchst.":
     "Installs the selected items via Homebrew, App Store, npm, pip, gem and VS Code. Untick what you don't need.",
   "Ausgewählte aktualisieren": "Update Selected",
-  "Aktualisiert die ausgewählten Pakete per Homebrew, App Store, npm, pip und gem in einem Terminal-Fenster.": "Updates the selected packages via Homebrew, App Store, npm, pip and gem in a Terminal window.",
+  "Aktualisiert die ausgewählten Pakete per Homebrew, App Store, npm, pip und gem – direkt in MacAtlas mit Live-Ausgabe.": "Updates the selected packages via Homebrew, App Store, npm, pip and gem – right inside MacAtlas with live output.",
   "Ausgewählte aufräumen": "Clean Up Selected",
-  "Führt die Befehle der ausgewählten Einträge nacheinander im Terminal aus – nach einer Rückfrage. Sichere Caches sind vorausgewählt, alles mit „prüfen\" musst du bewusst anhaken.":
-    "Runs the commands of the selected items one after another in Terminal – after asking. Safe caches are preselected; anything marked “review” has to be ticked on purpose.",
+  "Führt die Befehle der ausgewählten Einträge nacheinander aus – nach einer Rückfrage, direkt in MacAtlas. Sichere Caches sind vorausgewählt, alles mit „prüfen\" musst du bewusst anhaken.": "Runs the commands of the selected items one after another – after asking, right inside MacAtlas. Safe caches are preselected; anything marked “review” has to be ticked on purpose.",
   "{s} freigeben": "Free {s}", "Nichts ausgewählt": "Nothing selected",
   "Was installiert wird, legst du per Häkchen im Vergleich fest.": "Choose what gets installed with the checkboxes on the Compare page.",
   "Mit Update": "With update", "App Store": "App Store", "Ohne Paketquelle": "No package source", "Mit Notiz": "With note",
