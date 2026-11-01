@@ -15,6 +15,8 @@ function fixtureInventory() {
     { id: "apps", label: "Programme", items: [item("Rectangle", "0.80", "brew install --cask rectangle"), item("Some Tool", "1.0", null)] },
     { id: "brew_formulae", label: "Homebrew", items: [item("git", "2.50.0", "brew install git"), item("node", "24.0.0", "brew install node")] },
     { id: "npm", label: "npm", items: [item("typescript", "5.9.0", "npm install -g typescript")] },
+    { id: "gem", label: "Ruby Gems", items: [item("rake", "13.3.0", "gem install rake"),
+      { ...item("json", "2.9.1", null), system: true, install_desc: "Mit Ruby mitgeliefert" }] },
   ].map((c) => ({ ...c, count: c.items.length }));
   return {
     format: "mac-inventory/1",
@@ -113,6 +115,30 @@ test("main window: sidebar, quick open, lists, selection", async (t) => {
       assert.doesNotMatch(await script(), /^\s+git$/m);
       assert.match(await script(), /typescript@latest/);
       assert.match(await page.locator(".pick-summary").innerText(), /1 von 2/);
+    });
+
+    await t.test("packages that ship with the system are tagged and never installable", async () => {
+      await page.click('#nav [data-nav="gem"]');
+      const json = page.locator('#listBody [data-open="gem|json"]');
+      assert.match(await json.innerText(), /System/);
+      assert.equal(await json.locator(".rcmd").count(), 0);
+      await page.click('[data-listfilter="gem|system"]');
+      assert.equal(await page.locator("#listBody [data-open]").count(), 1);
+      await page.click('[data-listfilter="gem|all"]');
+      await json.click();
+      assert.match(await page.locator("#inspector").innerText(), /Mit Ruby mitgeliefert/);
+      assert.doesNotMatch(await page.locator("#inspector").innerText(), /Installieren/);
+      await page.keyboard.press("Escape");
+    });
+
+    await t.test("settings show the changelog", async () => {
+      await page.keyboard.press("Meta+,");
+      await page.click('[data-do="changelog"]');
+      await page.waitForSelector("#changelogSheet .cl-sec");
+      assert.ok(await page.locator("#changelogSheet .cl-sec").count() >= 3);
+      assert.match(await page.locator("#changelogSheet").innerText(), /1\.2\.1/);
+      await page.click('[data-cl="close"]');
+      assert.equal(await page.locator("#changelogSheet").count(), 0);
     });
 
     await t.test("scripts run inside the app with live output and a summary", async () => {

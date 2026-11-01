@@ -42,6 +42,9 @@ cd "$ROOT/electron"
 [ -d node_modules ] || npm install --no-audit --no-fund
 [ -f icon.icns ] || { python3 "$ROOT/make_icon.py" && cp "$ROOT/build/icon.icns" icon.icns; }
 
+# Settings → About → "What's new" reads the changelog from inside the app
+cp "$ROOT/CHANGELOG.md" "$ROOT/electron/CHANGELOG.md"
+
 echo "→ Packaging"
 rm -rf "dist/$APP_NAME-darwin-arm64"
 npx electron-packager . "$APP_NAME" --platform=darwin --arch=arm64 --out=dist --overwrite \

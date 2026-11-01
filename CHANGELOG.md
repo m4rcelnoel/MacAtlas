@@ -14,7 +14,10 @@
 - New package sources: Rust (`cargo install`), Go tools, pipx, uv tools, Composer, mise, asdf and MacPorts – including the install script for a new Mac.
 - MacAtlas updates itself: a daily check of GitHub Releases, then download, signature check, replace and restart from Settings.
 - Test button for notifications in Settings.
-- Gems of the Ruby that ships with macOS are no longer offered as updates or put into install scripts (they need root and belong to the system); permission errors get an explanation.
+- Packages that ship with the system – gems of macOS' Ruby, Ruby's own default gems, the Python packages of the Command Line Tools – are tagged *System*: still listed, but never offered as updates, put into install scripts or counted as missing in Compare. Permission errors get an explanation.
+- MacAtlas now scans the Ruby you actually use (Homebrew, rbenv, asdf, mise …) instead of only the first `gem` in PATH, and runs its updates with that Ruby.
+- Settings → *What's New* shows this changelog; it also opens once after an update.
+- Fix: pip packages whose name is as long as the column were read with their version in the name.
 - New app and menu bar icon.
 - UI tests with Playwright in CI; releases can update a Homebrew tap automatically.
 

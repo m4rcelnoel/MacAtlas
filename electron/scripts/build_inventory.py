@@ -389,16 +389,23 @@ def parse_updates(apps):
             add("npm", name, v.get("current", ""), v["latest"], cmd=f"npm install -g {name}@latest",
                 url=f"https://www.npmjs.com/package/{name}")
 
+    system_skipped = 0
+    pip_system = pip_system_names()
     for p in read_json("pip_outdated.json") or []:
         n = p.get("name", "")
+        if n.lower().replace("_", "-") in pip_system:
+            system_skipped += 1   # part of macOS' Python: not ours to update
+            continue
         add("pip", n, p.get("version", ""), p.get("latest_version", ""), cmd=f"pip3 install -U {n}",
             url=f"https://pypi.org/project/{urllib.parse.quote(n)}/")
 
-    system_gems = 0
+    # Only the Ruby you use is checked for updates (scan.sh); its full path goes into the script.
+    # Gems that ship with Ruby are left alone like macOS' own packages.
+    ruby_defaults = {n for n, _, d in _gem_lines("ruby_gems.txt") if d}
     for line in read_lines("gem_outdated.txt"):
         m = re.match(r"^(\S+)\s+\((\S+)\s+<\s+(\S+)\)", line)
-        if m and system_ruby():
-            system_gems += 1   # macOS' own Ruby: not ours to update
+        if m and m.group(1) in ruby_defaults:
+            system_skipped += 1
         elif m:
             add("gem", m.group(1), m.group(2), m.group(3), cmd=f"gem update {m.group(1)}",
                 url=f"https://rubygems.org/gems/{urllib.parse.quote(m.group(1))}")
@@ -415,7 +422,8 @@ def parse_updates(apps):
                 icon=a.get("icon"), auto=meta.get("auto_updates", False), cask=cask)
 
     items.sort(key=lambda x: (x["source"], x["name"].lower()))
-    return {"checked_at": checked, "items": items, "system_gems_skipped": system_gems}
+    gem_bin = (read_lines("gem_bin.txt") or [""])[0]
+    return {"checked_at": checked, "items": items, "system_skipped": system_skipped, "gem_bin": gem_bin}
 
 
 def parse_brew_formulae():
@@ -579,20 +587,29 @@ def parse_autostart():
     return out
 
 
+def pip_system_names():
+    """Packages that ship with the Command Line Tools' Python (pip, setuptools, six …)."""
+    return {n.lower().replace("_", "-") for n in read_lines("pip_system.txt")}
+
+
 def parse_pip():
     out = []
+    system = pip_system_names()
     for line in read_lines("pip_packages.txt"):
         if line.startswith("Package") or line.startswith("---"):
             continue
-        parts = re.split(r"\s{2,}", line)
+        parts = line.split()
         name = parts[0]
         ver = parts[1] if len(parts) > 1 else ""
-        out.append({
+        item = {
             "name": name,
             "version": ver,
             "install_cmd": f"pip3 install {name}",
             "install_url": f"https://pypi.org/project/{urllib.parse.quote(name)}/",
-        })
+        }
+        if name.lower().replace("_", "-") in system:
+            item.update(install_cmd=None, system=True, install_desc="Teil von macOS")
+        out.append(item)
     return out
 
 
@@ -619,29 +636,33 @@ def parse_npm():
     return out
 
 
-def system_ruby():
-    """True when `gem` belongs to the Ruby that ships with macOS – its gems need sudo and
-    shouldn't be changed, so they get no install or update commands."""
-    d = (read_lines("gem_dir.txt") or [""])[0]
-    return d.startswith("/Library/Ruby/") or d.startswith("/System/")
+def _gem_lines(name):
+    """[(name, version, default)] – "default" gems ship with Ruby itself, e.g. "date (default: 3.5.1)"."""
+    out = []
+    for line in read_lines(name):
+        m = re.match(r"^(\S+)\s*\(([^)]+)\)", line)
+        ver = m.group(2) if m else ""
+        out.append((m.group(1) if m else line, ver.replace("default: ", ""), "default:" in ver))
+    return out
 
 
 def parse_gems():
+    """Gems of the Ruby you use, plus those of macOS' own Ruby marked as "system":
+    they stay visible but get no install command and no updates (they need root)."""
     out = []
-    system = system_ruby()
-    for line in read_lines("ruby_gems.txt"):
-        m = re.match(r"^(\S+)\s*\(([^)]+)\)", line)
-        if m:
-            name, ver = m.group(1), m.group(2)
+    for name, ver, default in _gem_lines("ruby_gems.txt"):
+        url = f"https://rubygems.org/gems/{urllib.parse.quote(name)}"
+        if default:
+            out.append({"name": name, "version": ver, "install_cmd": None, "system": True, "install_url": url,
+                        "install_desc": "Mit Ruby mitgeliefert"})
         else:
-            name, ver = line, ""
-        out.append({
-            "name": name,
-            "version": ver,
-            "install_cmd": None if system else f"gem install {name}",
-            "install_url": f"https://rubygems.org/gems/{urllib.parse.quote(name)}",
-            **({"install_desc": "Teil des macOS-System-Ruby"} if system else {}),
-        })
+            out.append({"name": name, "version": ver, "install_cmd": f"gem install {name}", "install_url": url})
+    mine = {g["name"] for g in out}
+    for name, ver, _ in _gem_lines("ruby_gems_system.txt"):
+        if name not in mine:
+            out.append({"name": name, "version": ver, "install_cmd": None, "system": True,
+                        "install_url": f"https://rubygems.org/gems/{urllib.parse.quote(name)}",
+                        "install_desc": "Teil von macOS"})
     return out
 
 

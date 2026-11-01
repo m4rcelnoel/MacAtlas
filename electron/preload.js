@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld("inventory", {
   onInventoryChanged: (cb) => ipcRenderer.on("inventory:changed", () => cb()),
   onToast: (cb) => ipcRenderer.on("toast", (_e, p) => cb(p)),
   testNotification: () => ipcRenderer.invoke("notify:test"),
+  changelog: () => ipcRenderer.invoke("changelog:get"),
   appUpdate: () => ipcRenderer.invoke("appupdate:state"),
   checkAppUpdate: () => ipcRenderer.invoke("appupdate:check"),
   installAppUpdate: () => ipcRenderer.invoke("appupdate:install"),

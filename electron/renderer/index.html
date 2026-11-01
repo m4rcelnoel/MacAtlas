@@ -166,6 +166,8 @@ body.inactive .nav-item.sel .cnt { color: var(--secondary); }
 .insp-update { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .insp-update svg { width: 20px; height: 20px; color: var(--accent); flex: 0 0 auto; }
 .insp-update b { display: block; font-size: 13px; }
+.insp-update.system { background: var(--fill); }
+.insp-update.system svg { color: var(--secondary); }
 .insp-update span { font-size: 12px; color: var(--secondary); }
 .insp-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .insp-actions .btn { height: 28px; padding: 0 10px; font-size: 12px; }
@@ -373,6 +375,7 @@ body.inactive .nav-item.sel .cnt { color: var(--secondary); }
 .pill.green { background: color-mix(in srgb, #34c759 18%, transparent); color: #248a3d; }
 .pill.red { background: color-mix(in srgb, #ff453a 16%, transparent); color: #d63a30; }
 .pill.blue { background: color-mix(in srgb, #0a84ff 16%, transparent); color: #0a6fd8; }
+.pill.gray { background: var(--fill-2); color: var(--secondary); }
 @media (prefers-color-scheme: dark) {
   .pill.orange { color: #ffb340; } .pill.green { color: #4cd964; } .pill.red { color: #ff7a72; } .pill.blue { color: #5eb1ff; }
 }
@@ -461,6 +464,14 @@ kbd { font: 11px -apple-system, sans-serif; border: 1px solid var(--group-border
 .task-hint { display: flex; gap: 8px; align-items: center; font-size: 12px; margin-top: 8px; color: var(--secondary); }
 .task-hint svg { width: 15px; height: 15px; flex: 0 0 auto; color: var(--accent); }
 .task-errors div { font: 11px/1.45 var(--mono); color: #ff453a; padding: 2px 0; user-select: text; }
+.sheet.changelog { width: min(620px, calc(100vw - 32px)); }
+.cl-body { max-height: min(460px, 60vh); overflow-y: auto; padding-right: 4px; }
+.cl-sec h3 { font-size: 14px; margin: 14px 0 6px; display: flex; align-items: center; gap: 8px; }
+.cl-sec:first-child h3 { margin-top: 0; }
+.cl-sec ul { margin: 0; padding-left: 18px; }
+.cl-sec li { font-size: 12.5px; line-height: 1.5; margin: 3px 0; color: var(--secondary); }
+.cl-sec.new li { color: var(--label); }
+.cl-sec code { font: 11.5px var(--mono); background: var(--fill); border-radius: 4px; padding: 0 4px; }
 .sheet-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 .sheet-foot .btn.danger { margin-right: auto; color: #ff453a; }
 .noresults { text-align: center; color: var(--secondary); padding: 60px 20px; }

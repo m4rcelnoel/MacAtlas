@@ -32,6 +32,7 @@ Setting up a new Mac, cleaning up an old one or just answering *"what did I inst
 - An install command and website for every entry, full-text search (⌘F) across everything including your notes, and **Quick Open (⌘K)** to jump to any page, entry or action.
 - Keyboard friendly: ↑/↓ moves through lists and the sidebar, the detail panel follows; sidebar sections can be collapsed.
 - Every list can be filtered (with update, Homebrew, App Store, no package source, with note, Intel only, unused) and sorted by name, size, last use or source. Click an entry for a detail panel with its update, install/update/uninstall commands, note and all known facts.
+- Packages that ship with macOS or Ruby (system Ruby gems, Ruby's default gems, the Command Line Tools' Python packages) are tagged *System*: listed, but never updated, installed or treated as missing.
 - Hardware: model, chip, cores, memory, storage, battery health, displays, uptime.
 
 ### Maintenance

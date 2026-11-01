@@ -53,7 +53,8 @@ if (!window.inventory) {
     onAccent: noop, onFocus: noop, onScanStarted: noop, onScanProgress: noop,
     onScanDone: noop, onInventoryChanged: noop, onToast: noop,
     appUpdate: async () => ({ available: null, current: "dev", checked: null }), checkAppUpdate: async () => ({ available: null, current: "dev", checked: Date.now() }),
-    testNotification: async () => true, installAppUpdate: async () => false, onAppUpdate: noop, onAppUpdateProgress: noop,
+    testNotification: async () => true, installAppUpdate: async () => false,
+    changelog: async () => { try { return { text: await (await fetch("../../CHANGELOG.md")).text(), since: null, version: "dev" }; } catch { return null; } }, onAppUpdate: noop, onAppUpdateProgress: noop,
   };
 }
 
@@ -436,7 +437,7 @@ function rowHtml(it, cat, q, opts = {}) {
   const pick = opts.pick ? pickBox(opts.pick.ctx, opts.pick.group, pickKey(cat, it), it) : "";
   return `<div class="row clickable${state.inspect?.key === `${cat.id}|${it.name}` ? " current" : ""}" data-open="${openKey(cat, it)}" title="${esc(it.bundle_id || it.name)}">
     ${pick}${iconHtml(it, cat)}
-    <div class="rmain"><div class="rname">${hl(it.name, q)}${upd ? `<span class="pill blue">${t("Update")}</span>` : ""}${tagPills(note)}</div>${sub ? `<div class="rsub">${sub}</div>` : ""}${note?.note ? `<div class="rnote">${hl(note.note.split("\n")[0], q)}</div>` : ""}</div>
+    <div class="rmain"><div class="rname">${hl(it.name, q)}${it.system ? `<span class="pill gray" title="${t("Wird mitgeliefert – MacAtlas aktualisiert oder installiert es nicht.")}">${t("System")}</span>` : ""}${upd ? `<span class="pill blue">${t("Update")}</span>` : ""}${tagPills(note)}</div>${sub ? `<div class="rsub">${sub}</div>` : ""}${note?.note ? `<div class="rnote">${hl(note.note.split("\n")[0], q)}</div>` : ""}</div>
     ${cmd}${actionsHtml(it, cat)}
   </div>`;
 }
@@ -550,6 +551,8 @@ function inspectorHtml(cat, it) {
       <div><b>${esc(it.name)}</b><span>${esc(label(cat))}${it.version ? " · " + esc(it.version) : ""}</span></div>
       <button class="act insp-close" data-do="closeinspector" title="${t("Schließen")}" aria-label="${t("Schließen")}">✕</button>
     </div>
+    ${it.system ? `<div class="insp-update system">${svg("info")}<div><b>${esc(installDesc(it.install_desc) || t("Teil von macOS"))}</b>
+      <span>${t("Wird mitgeliefert – MacAtlas aktualisiert oder installiert es nicht.")}</span></div></div>` : ""}
     ${upd ? `<div class="insp-update">${svg("updates")}<div><b>${t("Update verfügbar")}</b>
       <span>${esc(upd.current || "?")} → ${esc(upd.latest)}${upd.auto ? " · " + t("aktualisiert sich selbst") : ""}</span></div></div>` : ""}
     <div class="insp-actions">
@@ -598,7 +601,8 @@ const LIST_FILTERS = {
   update: { label: "Mit Update", test: (it, cat) => !!updateFor(cat, it) },
   brew: { label: "Homebrew", test: (it) => /^brew /.test(it.install_cmd || "") },
   mas: { label: "App Store", test: (it) => /^mas /.test(it.install_cmd || "") },
-  nosource: { label: "Ohne Paketquelle", test: (it) => !it.install_cmd },
+  nosource: { label: "Ohne Paketquelle", test: (it) => !it.install_cmd && !it.system },
+  system: { label: "System", test: (it) => !!it.system },
   note: { label: "Mit Notiz", test: (it, cat) => !!noteOf(cat, it) },
   intel: { label: "Nur Intel", test: (it) => it.arch === "intel" },
   unused: { label: "Lange nicht benutzt", test: (it) => it.last_used && daysSince(it.last_used) > 180 },
@@ -823,10 +827,11 @@ function compareData() {
   for (const id of COMPARE_CATS) {
     const theirs = catById(id);
     if (!theirs) continue;
-    const mine = ownCat(id)?.items || [];
+    // Packages that ship with macOS are on every Mac – never "missing" or "only here"
+    const mine = (ownCat(id)?.items || []).filter((it) => !it.system);
     const mineKeys = new Set(mine.map((it) => it.name.toLowerCase()));
     const theirKeys = new Set(theirs.items.map((it) => it.name.toLowerCase()));
-    const relevant = theirs.items.filter((it) => !(id === "pip" && PIP_BASE.has(it.name.toLowerCase())));
+    const relevant = theirs.items.filter((it) => !it.system && !(id === "pip" && PIP_BASE.has(it.name.toLowerCase())));
     let missing = relevant.filter((it) => !mineKeys.has(it.name.toLowerCase()));
     let deps = 0;
     if (id === "brew_formulae" && missing.some((it) => "leaf" in it)) {
@@ -994,7 +999,9 @@ set -u
   if (mas.length) out += `\necho "==> Mac App Store (${mas.length})"\nmas upgrade ${mas.join(" ")}\n`;
   out += block("npm (global)", "npm install -g", npm);
   out += block("Python-Pakete", "pip3 install -U", pip);
-  out += block("Ruby Gems", "gem update", gem);
+  // The Ruby that was checked (e.g. Homebrew's), not whatever "gem" comes first in PATH
+  const gemBin = state.data.updates?.gem_bin && SAFE.test(state.data.updates.gem_bin) ? state.data.updates.gem_bin : "gem";
+  out += block("Ruby Gems", `${gemBin} update`, gem);
   out += `\necho ""\necho "${t("Fertig. Danach in MacAtlas neu scannen (⌘R).")}"\n`;
   return { text: out, count: brew.length + casks.length + mas.length + npm.length + pip.length + gem.length };
 }
@@ -1059,7 +1066,7 @@ function pageUpdates() {
       <details><summary>${t("Vorschau")}</summary><pre>${esc(scr.text)}</pre></details>
     </div>` : ""}
     ${groups}
-    ${u.system_gems_skipped ? `<div class="foot-note">${pl(u.system_gems_skipped, "{n} Gem des Ruby von macOS wird nicht angeboten – es gehört zum System und braucht Root-Rechte.", "{n} Gems des Ruby von macOS werden nicht angeboten – sie gehören zum System und brauchen Root-Rechte.")}</div>` : ""}
+    ${u.system_skipped ? `<div class="foot-note">${pl(u.system_skipped, "{n} Update für ein mitgeliefertes Paket (macOS, Ruby) wird nicht angeboten.", "{n} Updates für mitgelieferte Pakete (macOS, Ruby) werden nicht angeboten.")}</div>` : ""}
   </div>`;
 }
 
@@ -1361,6 +1368,47 @@ function openPalette() {
     if (row) run(Number(row.dataset.i));
   });
   draw(); inp.focus();
+}
+
+// ── What's new (CHANGELOG.md) ──────────────────────────────────────
+// Minimal Markdown: "## version" sections, "- " bullets, **bold**, *italic*, `code`, [text](https://…).
+// Everything is escaped first, so the file can't inject HTML.
+function changelogHtml(md, since) {
+  const newer = (v) => v === "Unreleased" || (since && cmpVersion(v, since) > 0);
+  const inline = (x) => esc(x)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\*([^*]+)\*/g, "<i>$1</i>")
+    .replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g, '<a href="#" data-url="$2">$1</a>');
+  return String(md).split(/^## /m).slice(1).map((sec) => {
+    const [title, ...lines] = sec.split("\n");
+    const items = lines.filter((l) => /^\s*[-*] /.test(l)).map((l) => `<li>${inline(l.replace(/^\s*[-*] /, ""))}</li>`).join("");
+    const v = title.trim();
+    return `<section class="cl-sec${newer(v) ? " new" : ""}"><h3>${v === "Unreleased" ? t("In Arbeit") : esc(v)}${newer(v) && since ? ` <span class="pill blue">${t("Neu")}</span>` : ""}</h3><ul>${items}</ul></section>`;
+  }).join("");
+}
+function cmpVersion(a, b) {
+  const p = (v) => String(v).replace(/^v/i, "").split(".").map((x) => parseInt(x, 10) || 0);
+  const x = p(a), y = p(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0) ? 1 : -1;
+  return 0;
+}
+async function openChangelog(data) {
+  const d = data || await window.inventory.changelog();
+  if (!d || !d.text || $("changelogSheet")) return;
+  const bg = document.createElement("div");
+  bg.className = "sheet-bg"; bg.id = "changelogSheet";
+  bg.innerHTML = `<div class="sheet changelog" role="dialog" aria-label="${t("Was ist neu")}">
+    <div class="sheet-head"><img src="icon.png" alt="" width="40" height="40">
+      <div><b>${d.since ? t("MacAtlas wurde aktualisiert") : t("Was ist neu")}</b><span>${d.since ? t("Version {a} → {b}", { a: esc(d.since), b: esc(d.version) }) : t("Version {c}", { c: esc(d.version) })}</span></div></div>
+    <div class="cl-body">${changelogHtml(d.text, d.since)}</div>
+    <div class="sheet-foot"><button class="btn" data-url="${REPO_URL}/releases">${svg("link")} ${t("Alle Releases")}</button><span style="flex:1"></span>
+      <button class="btn primary" data-cl="close">${t("Schließen")}</button></div></div>`;
+  document.body.appendChild(bg);
+  const close = () => { bg.remove(); document.removeEventListener("keydown", onKey, true); };
+  const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+  document.addEventListener("keydown", onKey, true);
+  bg.addEventListener("click", (e) => { if (e.target === bg || e.target.closest('[data-cl="close"]')) close(); });
 }
 
 // ── PDF report ─────────────────────────────────────────────────────
@@ -2111,6 +2159,7 @@ function pageSettings() {
     <div class="group-title">${t("MacAtlas aktualisieren")}</div>
     <div class="group">
       ${appUpdateRow()}
+      ${setRow("notes", t("Was ist neu"), t("Änderungen in jeder Version von MacAtlas."), `<button class="btn" data-do="changelog">${t("Anzeigen")}</button>`)}
       ${setRow("bell", t("Automatisch nach Updates suchen"), t("Einmal am Tag bei GitHub. Dabei werden keine Daten über deinen Mac gesendet."), toggle("updateCheck", s.updateCheck))}
     </div>
     <div class="group-title">${t("Über")}</div>
@@ -2284,6 +2333,7 @@ document.addEventListener("click", async (e) => {
       if (r === "manual") toast(t("Das Update liegt in „Downloads\" – MacAtlas in den Programme-Ordner ziehen."), 6000);
       return render({ keepScroll: true });
     }
+    case "changelog": return openChangelog();
     case "testnotify":
       return toast((await window.inventory.testNotification()) ? t("Test-Mitteilung gesendet") : t("Mitteilungen werden auf diesem Mac nicht unterstützt"), 3500);
     case "installclt": return runTask("Command Line Tools installieren", plainScript("Command Line Tools installieren", [["▸ xcode-select --install", "xcode-select --install"]]), { total: 1, terminal: confirmScript("Command Line Tools installieren", "xcode-select --install") });
@@ -2490,6 +2540,7 @@ async function load() {
 (async () => {
   try { state.settings = await window.inventory.getSettings(); } catch { state.settings = null; }
   try { state.appUpdate = await window.inventory.appUpdate(); } catch { state.appUpdate = null; }
+  window.inventory.changelog().then((d) => { if (d && d.since) openChangelog(d); }).catch(() => {});
   setLanguage(state.settings?.resolvedLanguage || "de");
   await load();
 })();

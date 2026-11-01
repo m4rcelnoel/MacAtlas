@@ -57,10 +57,14 @@ def write_fixture(work, home):
         "mas_outdated.txt": "497799835  Xcode        (27.1   -> 27.2)\n",
         "npm_global.txt": "├── corepack@0.35.0\n└── npm@11.17.0\n",
         "npm_outdated.json": json.dumps({"npm": {"current": "11.17.0", "latest": "12.2.1"}, "corepack": {"current": "0.36.0", "latest": "0.36.0"}}),
-        "pip_packages.txt": "Package    Version\n---------- -------\nrequests   2.32.0\npip        26.0\n",
-        "pip_outdated.json": json.dumps([{"name": "requests", "version": "2.32.0", "latest_version": "2.33.1"}]),
-        "ruby_gems.txt": "bundler (4.0.20)\n",
-        "gem_outdated.txt": "bundler (4.0.20 < 4.0.23)\n",
+        "pip_packages.txt": "Package    Version\n---------- -------\nrequests   2.32.0\npip        26.0\nsetuptools 82.0.1\n",
+        "pip_outdated.json": json.dumps([{"name": "requests", "version": "2.32.0", "latest_version": "2.33.1"},
+                                         {"name": "pip", "version": "26.0", "latest_version": "26.1"}]),
+        "pip_system.txt": "pip\nsetuptools\n",
+        "ruby_gems_system.txt": "bundler (2.1.4)\nCFPropertyList (2.3.6)\n",
+        "gem_bin.txt": "/opt/homebrew/bin/gem\n",
+        "ruby_gems.txt": "bundler (4.0.20)\ndate (default: 3.5.1)\n",
+        "gem_outdated.txt": "bundler (4.0.20 < 4.0.23)\ndate (3.5.1 < 3.6.0)\n",
         "vscode_extensions.txt": "esbenp.prettier-vscode\n",
         "docker_images.txt": "postgres:16|450MB\n",
         "docker_containers.txt": "db|postgres:16|Exited (0) 2 days ago\n",
@@ -159,17 +163,21 @@ class BuildInventoryTest(unittest.TestCase):
         self.assertEqual(cmd("macports"), {"ripgrep": "sudo port install ripgrep", "wget": "sudo port install wget"})
         self.assertEqual({i["name"]: i["version"] for i in self.cats["macports"]["items"]}, {"ripgrep": "14.1.0", "wget": "1.25.0"})
 
-    def test_system_ruby_gems_are_left_alone(self):
-        marker = self.work / "data" / "gem_dir.txt"
-        marker.write_text("/Library/Ruby/Gems/2.6.0\n")
-        try:
-            upd = self.mod.parse_updates(self.mod.APPS)
-            self.assertNotIn("gem", {i["source"] for i in upd["items"]})
-            self.assertEqual(upd["system_gems_skipped"], 1)
-            self.assertIsNone(self.mod.parse_gems()[0]["install_cmd"])
-        finally:
-            marker.unlink()
-        self.assertEqual(self.mod.parse_gems()[0]["install_cmd"], "gem install bundler")
+    def test_system_packages_are_shown_but_never_installed(self):
+        gems = {g["name"]: g for g in self.cats["gem"]["items"]}
+        self.assertEqual(gems["bundler"]["install_cmd"], "gem install bundler")   # own Ruby wins
+        self.assertTrue(gems["CFPropertyList"]["system"])
+        self.assertEqual((gems["date"]["version"], gems["date"]["system"]), ("3.5.1", True))   # ships with Ruby
+        self.assertIsNone(gems["CFPropertyList"]["install_cmd"])
+        pips = {p["name"]: p for p in self.cats["pip"]["items"]}
+        self.assertTrue(pips["pip"]["system"])
+        self.assertIsNone(pips["pip"]["install_cmd"])
+        self.assertNotIn("system", pips["requests"])
+        self.assertEqual(pips["setuptools"]["version"], "82.0.1")   # single space between columns
+        upd = self.inv["updates"]
+        self.assertNotIn(("pip", "pip"), {(i["source"], i["name"]) for i in upd["items"]})
+        self.assertEqual(upd["system_skipped"], 2)   # pip (macOS) + date (Ruby)
+        self.assertEqual(upd["gem_bin"], "/opt/homebrew/bin/gem")
 
     def test_formula_leaves(self):
         leaf = {f["name"]: f.get("leaf") for f in self.cats["brew_formulae"]["items"]}

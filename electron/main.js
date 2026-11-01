@@ -45,6 +45,7 @@ const DEFAULTS = {
   updateCheck: true,    // look for a new MacAtlas release on GitHub once a day
   lastUpdateCheck: null,
   notifiedVersion: null,
+  lastSeenVersion: null, // shows "What's new" once after an update
   reminded: {},
   lastUpdateCount: null,
   bounds: null,
@@ -582,7 +583,7 @@ function hasCommandLineTools() {
   return cltInstalled;
 }
 function publicSettings() {
-  const { bounds: _b, lastUpdateCount: _u, reminded: _r, notifiedVersion: _n, ...rest } = settings;
+  const { bounds: _b, lastUpdateCount: _u, reminded: _r, notifiedVersion: _n, lastSeenVersion: _l, ...rest } = settings;
   return {
     ...rest,
     openAtLogin: app.getLoginItemSettings().openAtLogin,
@@ -1263,6 +1264,20 @@ async function installAppUpdate() {
     return false;
   }
 }
+// ── What's new ───────────────────────────────────────────────────────
+// CHANGELOG.md is copied next to main.js by build.sh; from source it lives one level up.
+// After an update, the first request also returns the version the user came from.
+let whatsNewSince = null;
+ipcMain.handle("changelog:get", () => {
+  let text = "";
+  for (const f of [path.join(__dirname, "CHANGELOG.md"), path.join(__dirname, "..", "CHANGELOG.md")]) {
+    try { text = fs.readFileSync(f, "utf8").slice(0, 200000); break; } catch {}
+  }
+  const since = whatsNewSince;
+  whatsNewSince = null;
+  return { text, since, version: app.getVersion() };
+});
+
 ipcMain.handle("appupdate:state", () => appUpdateState());
 ipcMain.handle("appupdate:check", async () => {
   try { await checkAppUpdate(true); return appUpdateState(); }
@@ -1273,6 +1288,8 @@ ipcMain.handle("appupdate:install", () => installAppUpdate());
 app.whenReady().then(() => {
   if (!gotLock) return;
   nativeTheme.themeSource = settings.theme;
+  if (settings.lastSeenVersion && settings.lastSeenVersion !== app.getVersion()) whatsNewSince = settings.lastSeenVersion;
+  if (settings.lastSeenVersion !== app.getVersion()) { settings.lastSeenVersion = app.getVersion(); saveSettings(); }
   app.setAboutPanelOptions({ applicationName: "MacAtlas", applicationVersion: app.getVersion(), copyright: "© buddster · buddster.de" });
   createWindow();
   setTrayVisible(settings.showTray);

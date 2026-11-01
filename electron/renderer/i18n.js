@@ -424,9 +424,14 @@ const I18N_EN = {
   "Es läuft bereits eine Aufgabe": "Another task is already running", "Ein Fehler": "1 error", "{n} Fehler": "{n} errors",
   "Im App Store anmelden und dann noch einmal versuchen.": "Sign in to the App Store, then try again.",
   "Ohne Administrator-Passwort konnten einige Pakete nicht installiert werden.": "Some packages couldn't be installed without the administrator password.",
-  "{n} Gem des Ruby von macOS wird nicht angeboten – es gehört zum System und braucht Root-Rechte.": "{n} gem of macOS' own Ruby is not offered – it belongs to the system and needs root rights.",
-  "{n} Gems des Ruby von macOS werden nicht angeboten – sie gehören zum System und brauchen Root-Rechte.": "{n} gems of macOS' own Ruby are not offered – they belong to the system and need root rights.",
   "Keine Schreibrechte – meist beim Ruby oder Python von macOS. Diese Pakete gehören zum System und sollten nicht aktualisiert werden.": "No write permission – usually macOS' own Ruby or Python. Those packages belong to the system and shouldn't be updated.",
-  "Teil des macOS-System-Ruby": "Part of macOS' system Ruby",
   "MacAtlas löscht nie selbst etwas. Befehle laufen nur nach deiner Bestätigung.": "MacAtlas never deletes anything on its own. Commands only run after you confirm.",
+  // what's new
+  "In Arbeit": "In progress", "Neu": "New", "Was ist neu": "What's New", "MacAtlas wurde aktualisiert": "MacAtlas was updated",
+  "Version {a} → {b}": "Version {a} → {b}", "Alle Releases": "All Releases", "Änderungen in jeder Version von MacAtlas.": "Changes in every version of MacAtlas.",
+  "Anzeigen": "Show",
+  "Wird mitgeliefert – MacAtlas aktualisiert oder installiert es nicht.": "Ships with the system – MacAtlas never updates or installs it.",
+  "Mit Ruby mitgeliefert": "Ships with Ruby",
+  "{n} Update für ein mitgeliefertes Paket (macOS, Ruby) wird nicht angeboten.": "{n} update for a bundled package (macOS, Ruby) is not offered.",
+  "{n} Updates für mitgelieferte Pakete (macOS, Ruby) werden nicht angeboten.": "{n} updates for bundled packages (macOS, Ruby) are not offered.",
 };

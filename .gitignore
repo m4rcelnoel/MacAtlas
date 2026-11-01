@@ -2,6 +2,8 @@
 electron/node_modules/
 electron/dist/
 build/
+# copied in by build.sh
+electron/CHANGELOG.md
 
 # Local test/preview data (contains real machine data)
 inventory.json

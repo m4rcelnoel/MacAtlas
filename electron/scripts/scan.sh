@@ -88,9 +88,24 @@ echo "→ npm / pip / gem"
 npm list -g --depth=0 2>/dev/null | tail -n +2 | grep -v '^$' > data/npm_global.txt || true
 pip3 list 2>/dev/null > data/pip_packages.txt || true
 found pip data/pip_packages.txt . 2
-gem list --local 2>/dev/null > data/ruby_gems.txt || true
-# Where gems go: /Library/Ruby/… = the Ruby that ships with macOS (read-only without sudo)
-gem env gemdir 2>/dev/null > data/gem_dir.txt || : > data/gem_dir.txt
+# Packages that ship with the Python of the Command Line Tools are part of macOS, not yours
+command -v pip3 > data/pip_bin.txt 2>/dev/null || : > data/pip_bin.txt
+: > data/pip_system.txt
+if [ "$(cat data/pip_bin.txt)" = /usr/bin/pip3 ] && xcode-select -p >/dev/null 2>&1; then
+  base=$(/usr/bin/python3 -c 'import sys; print(sys.base_prefix)' 2>/dev/null || true)
+  for d in "$base"/lib/python3*/site-packages/*.dist-info; do
+    [ -d "$d" ] && basename "$d" | sed -E 's/-[0-9][^-]*\.dist-info$//' >> data/pip_system.txt
+  done
+fi
+# Ruby: macOS' own Ruby (/usr/bin/gem, read-only) is listed as "System";
+# the Ruby you actually use (Homebrew, rbenv, asdf, mise …) is the first other gem in PATH
+usergem=""
+for g in $(which -a gem 2>/dev/null | awk '!seen[$0]++'); do
+  case "$g" in /usr/bin/gem|/System/*) ;; *) usergem="$g"; break ;; esac
+done
+echo "$usergem" > data/gem_bin.txt
+if [ -n "$usergem" ]; then "$usergem" list --local 2>/dev/null > data/ruby_gems.txt || true; else : > data/ruby_gems.txt; fi
+/usr/bin/gem list --local 2>/dev/null > data/ruby_gems_system.txt || : > data/ruby_gems_system.txt
 found npm data/npm_global.txt
 found gem data/ruby_gems.txt
 
@@ -158,7 +173,7 @@ fi
 mas outdated > data/mas_outdated.txt 2>/dev/null || true
 npm outdated -g --json > data/npm_outdated.json 2>/dev/null || true
 with_timeout 60 pip3 list --outdated --format=json > data/pip_outdated.json 2>/dev/null || true
-with_timeout 60 gem outdated > data/gem_outdated.txt 2>/dev/null || true
+if [ -n "$usergem" ]; then with_timeout 60 "$usergem" outdated > data/gem_outdated.txt 2>/dev/null || true; else : > data/gem_outdated.txt; fi
 date +%Y-%m-%dT%H:%M:%S > data/updates_checked.txt
 
 echo "→ Security + autostart"
